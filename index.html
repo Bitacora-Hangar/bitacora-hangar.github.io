@@ -605,11 +605,21 @@ document.querySelectorAll(".door[data-role]").forEach(b=>b.addEventListener("cli
     msg("login-msg",`No se pudo entrar con Google (${err?.code||err?.message||"error"}). Probá de nuevo o abrí la página en Chrome o Safari.`,"err");
   }
 }));
+async function ensureAdminProf(u){
+  try{
+    const r=DB.doc("usuarios/"+u.uid), d=await r.get();
+    if(d.exists && d.data().estado==="aprobado") return;
+    if(!d.exists) await r.set({nombre:u.displayName||u.email,email:u.email,estado:"pendiente",fecha:now()});
+    await r.update({estado:"aprobado",revisado:now(),revisadoPor:"Administrador"});
+  }catch(_){}
+}
 // Decide qué puede hacer esta cuenta de Google con el rol elegido
 async function enterAs(role,u){
   S.uid=u.uid;
   // El alumno no pide acceso: entra con Google y ya puede cargar registros para que los revise un profesor
   if(role==="alumno"){ S.alumnoEmail=u.email||""; setRole("alumno",u.displayName||u.email); loadProfs(); route(); return; }
+  // El administrador también figura en la lista de profesores que eligen los alumnos
+  if(isAdminEmail(u)) ensureAdminProf(u);
   if(role==="admin"){
     if(!isAdminEmail(u)){ msg("login-msg",`La cuenta ${u.email} no es de administrador.`,"err"); return; }
     setRole("admin",u.displayName||u.email); route(); return;
@@ -694,7 +704,7 @@ async function loadProfs(){
 function watchEnvios(){
   if(S.envUnsub){ S.envUnsub(); S.envUnsub=null; }
   S.envios=[]; renderEnvios();
-  if(!S.uid || (S.role!=="alumno" && S.role!=="profesor")) return;
+  if(!S.uid || !S.role) return;
   S.envUnsub=DB.collection("envios").where(S.role==="alumno"?"alumnoId":"profesorId","==",S.uid).onSnapshot(snap=>{
     S.envios=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.enviado<b.enviado?1:-1);
     renderEnvios();
@@ -704,9 +714,10 @@ const REV = {pendiente:["pendiente","Esperando revisión"],aprobado:["ok","Aprob
 function renderEnvios(){
   const L=S.envios||[];
   const pend=L.filter(x=>x.revision==="pendiente");
-  $("review").hidden = S.role!=="profesor" || !pend.length;
+  const rev=S.role==="profesor"||S.role==="admin";
+  $("review").hidden = !rev || !pend.length;
   $("sent").hidden = S.role!=="alumno" || !L.length;
-  if(S.role==="profesor"){
+  if(rev){
     const typing={}; $("review-list").querySelectorAll("input[data-rnote]").forEach(i=>typing[i.dataset.rnote]=i.value);
     $("review-list").innerHTML = pend.length ? pend.map(x=>{
       const r=x.rec||{}, p=S.planes.get(x.avionId)||{matricula:x.matricula,limites:{}};
@@ -1415,7 +1426,7 @@ function boot(){
     S.loaded=true;
     $("seed-box").hidden = S.planes.size>0;
     if(S.current) renderDetail(); else renderFleet();
-    if(S.role==="profesor") renderEnvios();
+    if(S.role==="profesor"||S.role==="admin") renderEnvios();
     if(S.role==="admin" && !S.purged){ S.purged=true; purgeOld(); }
   },err=>{ S.loaded=true; $("fleet").innerHTML=`<div class="empty">No se pudo leer la lista de aviones.</div>`; });
 }

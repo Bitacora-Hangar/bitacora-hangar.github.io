@@ -30,9 +30,22 @@ service cloud.firestore {
       }
     }
 
-    // Solicitudes de acceso de profesores
+    // Registros cargados por alumnos: quedan pendientes hasta que el profesor elegido los aprueba
+    match /envios/{envio} {
+      allow create: if signedIn() && request.resource.data.alumnoId == request.auth.uid
+        && request.resource.data.revision == 'pendiente'
+        && get(/databases/$(database)/documents/usuarios/$(request.resource.data.profesorId)).data.estado == 'aprobado';
+      allow read: if isAdmin() || (signedIn()
+        && (resource.data.alumnoId == request.auth.uid || resource.data.profesorId == request.auth.uid));
+      allow update: if isAdmin() || (isProf() && resource.data.profesorId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revision', 'nota', 'revisado', 'registroId']));
+      allow delete: if isAdmin();
+    }
+
+    // Solicitudes de acceso de profesores (los alumnos ven la lista de aprobados para elegir a cargo)
     match /usuarios/{uid} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid)
+        || (signedIn() && resource.data.estado == 'aprobado');
       allow create: if signedIn() && request.auth.uid == uid
         && request.resource.data.estado == 'pendiente'
         && request.resource.data.email == request.auth.token.email;

@@ -3,7 +3,7 @@
 App web del taller: cada avión tiene un QR que abre sus manuales y su bitácora
 (puestas en marcha, mantenimiento, observaciones y cargas de combustible).
 
-- **Alumno**: entra sin cuenta y ve solo los manuales.
+- **Alumno**: entra con su cuenta de Google, sin pedir acceso. Ve los manuales y carga registros eligiendo a su profesor a cargo; quedan pendientes hasta que ese profesor los aprueba y recién ahí pasan al historial del avión.
 - **Profesor**: entra con Google. La primera vez envía una solicitud y el administrador la acepta o la rechaza.
 - **Administrador**: entra con Google (cuentas listadas en `config.js` y `firestore.rules`). Agrega y elimina aviones (quedan 30 días en Eliminados), carga datos y límites y aprueba profesores.
 

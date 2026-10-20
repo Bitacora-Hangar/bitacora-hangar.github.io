@@ -37,6 +37,7 @@ img{max-width:100%}
 .role-alumno .prof-only{display:none!important}
 body:not(.role-admin) .admin-only{display:none!important}
 body:not(.role-profesor):not(.role-admin) .staff-only{display:none!important}
+body:not(.role-alumno) .alumno-only{display:none!important}
 /* Menú del avión: mosaico de opciones grandes */
 .menu{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
 .tile{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:18px 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);min-height:96px}
@@ -191,7 +192,7 @@ details>summary{cursor:pointer;font-weight:600}
   <section id="view-start" class="start" hidden>
     <h2>¿Cómo entrás?</h2>
     <div class="doors">
-      <button type="button" class="door" id="go-alumno"><b>Alumno</b><span>Ver los manuales de cada avión.</span></button>
+      <button type="button" class="door" id="go-alumno" data-role="alumno" aria-pressed="false"><b>Alumno</b><span>Entrá con tu cuenta de Google. Ves los manuales y cargás registros que después aprueba tu profesor.</span></button>
       <button type="button" class="door" id="go-prof" data-role="profesor" aria-pressed="false"><b>Profesor</b><span>Entrá con tu cuenta de Google. La primera vez el administrador tiene que aprobarte.</span></button>
       <button type="button" class="door" id="go-admin" data-role="admin" aria-pressed="false"><b>Administrador</b><span>Entrá con tu cuenta de Google. Aviones, datos, límites y profesores.</span></button>
     </div>
@@ -210,11 +211,22 @@ details>summary{cursor:pointer;font-weight:600}
     </div>
   </section>
 
+  <!-- Profesor: registros de alumnos esperando aprobación (se ve en todas las pantallas) -->
+  <div id="review" class="panel" hidden>
+    <h2>Para revisar</h2>
+    <div class="small muted">Registros que cargaron tus alumnos. Si están bien, aprobalos y pasan al historial del avión.</div>
+    <div id="review-list" class="stack"></div>
+  </div>
+
   <!-- Lista de aviones -->
   <section id="view-list" class="stack" hidden>
     <div class="row" style="justify-content:space-between">
       <h2>Aviones</h2>
       <input id="search" type="search" placeholder="Buscar matrícula o modelo" style="max-width:280px">
+    </div>
+    <div id="sent" class="panel" hidden>
+      <h2>Mis registros enviados</h2>
+      <div id="sent-list" class="stack"></div>
     </div>
     <div id="fleet" class="fleet"><div class="empty">Cargando aviones…</div></div>
     <details id="add-box" class="panel admin-only">
@@ -272,6 +284,7 @@ details>summary{cursor:pointer;font-weight:600}
         </div>
       <form id="entry-form" class="panel" novalidate hidden>
         <div class="row" style="justify-content:space-between"><h2 id="form-title">Puesta en marcha</h2><button type="button" id="kind-change" class="ghost small">Cambiar tipo</button></div>
+        <div class="field alumno-only"><label for="al-prof">Profesor a cargo *</label><select id="al-prof"><option value="">Elegí un profesor</option></select></div>
 
         <!-- Planilla de puesta en marcha -->
         <div id="sheet-pm" class="sheet">
@@ -376,7 +389,7 @@ details>summary{cursor:pointer;font-weight:600}
             </select></div>
         </div>
         <div class="field"><label for="e-text" id="e-text-lbl">Observaciones</label><textarea id="e-text"></textarea></div>
-        <div class="row"><button class="primary" type="submit">Guardar registro</button><span id="e-msg" class="msg"></span></div>
+        <div class="row"><button class="primary" type="submit" id="e-submit">Guardar registro</button><span id="e-msg" class="msg"></span></div>
       </form>
       <datalist id="ref-list"></datalist>
       </div>
@@ -555,7 +568,7 @@ function outOf(p,row,v){
 }
 
 /* ---------- Ingreso ----------
-   Alumno: sin cuenta, solo manuales.
+   Alumno: cuenta de Google sin aprobación; ve manuales y manda registros a un profesor (colección "envios").
    Profesor: cuenta de Google aprobada por el administrador (colección "usuarios").
    Administrador: cuenta de Google listada en config.js (adminEmails). */
 const ROLE_LABEL = {alumno:"Alumno",profesor:"Profesor",admin:"Administrador"};
@@ -565,15 +578,16 @@ function setRole(role,name){
   ["alumno","profesor","admin"].forEach(r=>document.body.classList.toggle("role-"+r,role===r));
   $("who-box").hidden=!role;
   $("who-role").textContent = ROLE_LABEL[role]||"";
-  $("who-txt").textContent = role==="alumno"?"Solo lectura de manuales":S.prof;
+  $("who-txt").textContent = S.prof;
+  $("e-submit").textContent = role==="alumno" ? "Enviar al profesor" : "Guardar registro";
   S.current=null;
   if(role==="admin") watchPeople(); else stopPeople();
+  watchEnvios();
 }
 // Navegadores dentro de otras apps (WhatsApp, Instagram, lectores de QR): Google bloquea el inicio de sesión
 const UA=navigator.userAgent||"";
 const IN_APP=/FBAN|FBAV|Instagram|WhatsApp|Line\/|Snapchat|TikTok|; wv\)/i.test(UA) || (/iPhone|iPad|iPod/.test(UA) && !/Safari\//.test(UA));
 function showStartPanel(which){ $("req-form").hidden=which!=="req"; $("req-wait").hidden=which!=="wait"; }
-$("go-alumno").addEventListener("click",()=>{ setRole("alumno"); route(); });
 document.querySelectorAll(".door[data-role]").forEach(b=>b.addEventListener("click",async()=>{
   msg("login-msg",""); showStartPanel(null);
   if(!auth.currentUser && IN_APP){ msg("login-msg","Google no deja iniciar sesión desde el navegador de esta aplicación. Tocá los tres puntos (⋮ o ···) y elegí \"Abrir en el navegador\", o copiá el link y pegalo en Chrome o Safari.","err"); return; }
@@ -593,6 +607,9 @@ document.querySelectorAll(".door[data-role]").forEach(b=>b.addEventListener("cli
 }));
 // Decide qué puede hacer esta cuenta de Google con el rol elegido
 async function enterAs(role,u){
+  S.uid=u.uid;
+  // El alumno no pide acceso: entra con Google y ya puede cargar registros para que los revise un profesor
+  if(role==="alumno"){ S.alumnoEmail=u.email||""; setRole("alumno",u.displayName||u.email); loadProfs(); route(); return; }
   if(role==="admin"){
     if(!isAdminEmail(u)){ msg("login-msg",`La cuenta ${u.email} no es de administrador.`,"err"); return; }
     setRole("admin",u.displayName||u.email); route(); return;
@@ -623,8 +640,9 @@ $("req-form").addEventListener("submit",async e=>{
 });
 document.querySelectorAll("[data-signout]").forEach(b=>b.addEventListener("click",async()=>{ await signOut(auth); showStartPanel(null); }));
 $("logout").addEventListener("click",async()=>{
-  const was=S.role; setRole(null); showStartPanel(null);
-  if(was!=="alumno") try{ await signOut(auth); }catch(_){}
+  setRole(null); showStartPanel(null);
+  if(location.hash) history.replaceState(null,"",location.pathname);
+  try{ await signOut(auth); }catch(_){}
   $("saved-box").hidden=true; route();
 });
 
@@ -661,6 +679,73 @@ $("seed-btn").addEventListener("click",async()=>{
 
 $("mt-sis").innerHTML = SISTEMAS.map(s=>`<option>${s}</option>`).join("");
 
+/* ---------- Registros de alumnos ---------- */
+// Lista de profesores aprobados por el administrador, para que el alumno elija a cargo de quién está
+async function loadProfs(){
+  try{
+    const q=await DB.collection("usuarios").where("estado","==","aprobado").get();
+    S.profs=q.docs.map(d=>({id:d.id,nombre:d.data().nombre||d.data().email})).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  }catch(_){ S.profs=[]; }
+  const last=lsGet("bitacora-prof");
+  $("al-prof").innerHTML=`<option value="">${S.profs.length?"Elegí un profesor":"Todavía no hay profesores aprobados"}</option>`+
+    S.profs.map(x=>`<option value="${esc(x.id)}"${x.id===last?" selected":""}>${esc(x.nombre)}</option>`).join("");
+}
+// Alumno: sus envíos. Profesor: los que le mandaron a él.
+function watchEnvios(){
+  if(S.envUnsub){ S.envUnsub(); S.envUnsub=null; }
+  S.envios=[]; renderEnvios();
+  if(!S.uid || (S.role!=="alumno" && S.role!=="profesor")) return;
+  S.envUnsub=DB.collection("envios").where(S.role==="alumno"?"alumnoId":"profesorId","==",S.uid).onSnapshot(snap=>{
+    S.envios=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>a.enviado<b.enviado?1:-1);
+    renderEnvios();
+  },()=>{});
+}
+const REV = {pendiente:["pendiente","Esperando revisión"],aprobado:["ok","Aprobado"],rechazado:["no_tocar","Rechazado"]};
+function renderEnvios(){
+  const L=S.envios||[];
+  const pend=L.filter(x=>x.revision==="pendiente");
+  $("review").hidden = S.role!=="profesor" || !pend.length;
+  $("sent").hidden = S.role!=="alumno" || !L.length;
+  if(S.role==="profesor"){
+    const typing={}; $("review-list").querySelectorAll("input[data-rnote]").forEach(i=>typing[i.dataset.rnote]=i.value);
+    $("review-list").innerHTML = pend.length ? pend.map(x=>{
+      const r=x.rec||{}, p=S.planes.get(x.avionId)||{matricula:x.matricula,limites:{}};
+      return `<div class="alert a-pendiente">
+        <div class="row" style="justify-content:space-between"><b><span class="mono">${esc(x.matricula)}</span> · ${esc(r.tipo)}</b><span class="small muted mono">${esc(fmt(r.fecha))}</span></div>
+        <div class="small muted">Cargó ${esc(x.alumno)}${x.alumnoEmail?` (${esc(x.alumnoEmail)})`:""}${r.clase==="comb"?"":` · cómo quedó el avión: ${esc(EST[r.estado]?.label||"")}`}${r.horas?` · ${esc(r.horas)} h`:""}</div>
+        <p>${esc(r.texto)}</p>${details(r,p)}
+        <div class="row"><input data-rnote="${esc(x.id)}" placeholder="Comentario para el alumno" style="flex:1 1 200px" value="${esc(typing[x.id]||"")}">
+          <button type="button" class="primary" data-rok="${esc(x.id)}">Aprobar</button><button type="button" class="danger" data-rno="${esc(x.id)}">Rechazar</button></div>
+        <span class="msg" id="rm-${esc(x.id)}"></span></div>`;
+    }).join("") : `<div class="small muted">No tenés registros para revisar.</div>`;
+  }
+  if(S.role==="alumno"){
+    $("sent-list").innerHTML = L.map(x=>{ const r=x.rec||{}, [c,l]=REV[x.revision]||REV.pendiente;
+      return `<div class="entry"><div class="when">${esc(fmt(x.enviado))}</div><div class="body">
+        <div class="row"><b><span class="mono">${esc(x.matricula)}</span> · ${esc(r.tipo)}</b><span class="chip c-${c}">${l}</span></div>
+        <div class="small muted">Profesor: ${esc(x.profesor)}</div>
+        ${x.nota?`<div class="small"><b>Comentario:</b> ${esc(x.nota)}</div>`:""}</div></div>`; }).join("");
+  }
+}
+$("review-list").addEventListener("click",async e=>{
+  const b=e.target.closest("[data-rok],[data-rno]"); if(!b) return;
+  const id=b.dataset.rok||b.dataset.rno, x=(S.envios||[]).find(v=>v.id===id); if(!x) return;
+  const nota=(document.querySelector(`input[data-rnote="${CSS.escape(id)}"]`)?.value||"").trim(), mid="rm-"+id;
+  if(b.dataset.rno && !nota) return msg(mid,"Escribí en el comentario por qué lo rechazás, así el alumno lo puede corregir.","err");
+  b.disabled=true;
+  try{
+    if(b.dataset.rno){ await DB.doc("envios/"+id).update({revision:"rechazado",nota,revisado:now()}); return; }
+    const p=S.planes.get(x.avionId);
+    if(!p || p.eliminado){ b.disabled=false; return msg(mid,"Ese avión ya no está en la lista.","err"); }
+    // Al aprobarlo pasa al historial del avión, a nombre del alumno y con el profesor que lo aprobó
+    const fecha=now();
+    const ref=await DB.collection(`aviones/${x.avionId}/registros`).add({...x.rec,autor:x.alumno,alumno:x.alumno,alumnoId:x.alumnoId,
+      autorId:S.uid,aprobadoPor:S.prof,aprobado:fecha,nota,envioId:id});
+    await refreshSummary(x.avionId);
+    await DB.doc("envios/"+id).update({revision:"aprobado",nota,revisado:fecha,registroId:ref.id});
+  }catch(err){ msg(mid,writeErr(err),"err"); b.disabled=false; }
+});
+
 /* ---------- Navegación ---------- */
 function route(){
   const id = (location.hash||"").slice(1);
@@ -685,7 +770,7 @@ function openDetail(id){
     ["m-title","m-url","m-ftitle"].forEach(f=>$(f).value="");
     ["e-msg","m-link-msg","m-file-msg","ed-msg","del-msg"].forEach(m=>msg(m,""));
     resetDelete(); $("saved-box").hidden=true; S.calDay=null; S.calMonth=null;
-    showSub(S.role==="alumno"?"manuales":"menu");
+    showSub("menu");
     if(S.logUnsub){ S.logUnsub(); S.logUnsub=null; }
     subscribeLog();
     window.scrollTo(0,0);
@@ -843,7 +928,10 @@ function resetEntryForm(){
 
 $("entry-form").addEventListener("submit",async e=>{
   e.preventDefault();
-  if(!needName("e-msg")) return;
+  const isAl=S.role==="alumno";
+  if(!isAl && !needName("e-msg")) return;
+  const pr=isAl ? (S.profs||[]).find(x=>x.id===$("al-prof").value) : null;
+  if(isAl && !pr) return msg("e-msg","Elegí el profesor a cargo.","err");
   const p=plane(); if(!p) return;
   const k=S.kind, texto=$("e-text").value.trim(), estado=$("e-state").value;
   if(k==="pm" && !texto && estado!=="ok" && !readPm(p).fuera.length) return msg("e-msg","Contá qué hay que arreglar o por qué no se puede tocar.","err");
@@ -883,15 +971,21 @@ $("entry-form").addEventListener("submit",async e=>{
   const id=S.current;
   try{
     const rec={fecha:now(),clase:k,tipo,estado:estadoFinal,abierto:estadoFinal!=="ok",
-      texto:texto||(datos.fuera?.length?"Valores fuera de límite en la puesta en marcha.":(k==="pm"?"Puesta en marcha sin observaciones.":k==="comb"?`${datos.litros} L de ${datos.combustible}.`:"")),horas,datos,autor:myName(),autorId:S.uid,seguimiento:[]};
-    await S.db.collection(`aviones/${id}/registros`).add(rec);
+      texto:texto||(datos.fuera?.length?"Valores fuera de límite en la puesta en marcha.":(k==="pm"?"Puesta en marcha sin observaciones.":k==="comb"?`${datos.litros} L de ${datos.combustible}.`:"")),horas,datos,autor:isAl?S.prof:myName(),autorId:S.uid,seguimiento:[]};
+    if(isAl){
+      // Queda pendiente hasta que el profesor elegido lo apruebe
+      await S.db.collection("envios").add({avionId:id,matricula:p.matricula,rec,alumno:S.prof,alumnoId:S.uid,alumnoEmail:S.alumnoEmail||"",
+        profesorId:pr.id,profesor:pr.nombre,revision:"pendiente",enviado:rec.fecha});
+      lsSet("bitacora-prof",pr.id);
+    } else await S.db.collection(`aviones/${id}/registros`).add(rec);
     resetEntryForm();
     msg("e-msg","");
-    S.lastSaved={r:rec,p};
-    $("saved-txt").textContent=`Registro guardado a nombre de ${rec.autor}.`;
+    S.lastSaved=isAl?null:{r:rec,p};
+    $("saved-pdf").hidden=isAl;
+    $("saved-txt").textContent= isAl ? `Registro enviado a ${pr.nombre}. Cuando lo apruebe, queda en el historial del avión.` : `Registro guardado a nombre de ${rec.autor}.`;
     msg("saved-msg",""); $("saved-box").hidden=false; $("entry-form").hidden=true;
     $("saved-box").scrollIntoView({block:"nearest"});
-    await refreshSummary(id);
+    if(!isAl) await refreshSummary(id);
   }catch(err){ msg("e-msg",writeErr(err),"err"); }
   btn.disabled=false;
 });
@@ -920,7 +1014,7 @@ function renderLog(){
     return `<div class="alert a-${r.estado}">
       <div class="row" style="justify-content:space-between"><span class="chip c-${r.estado}">${EST[r.estado].label}</span><span class="small muted mono">${esc(fmt(r.fecha))}</span></div>
       <p>${esc(r.texto)}</p>${fuera}
-      <div class="small muted">${esc(r.tipo)} · cargado por ${esc(r.autor)}</div>
+      <div class="small muted">${esc(r.tipo)} · cargado por ${esc(r.autor)}${r.aprobadoPor?` · aprobó ${esc(r.aprobadoPor)}`:""}</div>
       ${trail(r)}
       <div class="row"><input data-note="${esc(r.id)}" placeholder="Comentario (opcional)" style="flex:1 1 200px" value="${esc(typing[r.id]||"")}">
         ${acts.map(([to,l])=>`<button type="button" data-act="${esc(r.id)}" data-to="${to}">${l}</button>`).join("")}</div>
@@ -937,7 +1031,7 @@ function renderLog(){
         <div class="row"><b>${esc(r.tipo)}</b>${r.clase==="comb"?"":`<span class="chip c-${EST[r.estado]?r.estado:"ok"}">${stLabel(r)}</span>`}${r.horas?`<span class="small muted mono">${esc(r.horas)} h</span>`:""}</div>
         <p>${esc(r.texto)}</p>
         ${details(r,p)}
-        <div class="small muted">${esc(r.autor)}${r.datos?.supervisa?` · supervisó ${esc(r.datos.supervisa)}`:""}${r.datos?.verifico?` · verificó ${esc(r.datos.verifico)}`:""}</div>
+        <div class="small muted">${esc(r.autor)}${r.aprobadoPor?` (alumno) · aprobó ${esc(r.aprobadoPor)}`:""}${r.datos?.supervisa?` · supervisó ${esc(r.datos.supervisa)}`:""}${r.datos?.verifico?` · verificó ${esc(r.datos.verifico)}`:""}</div>
         ${trail(r)}
         <div class="prof-only"><button type="button" class="ghost small" data-pdf="${esc(r.id)}">Descargar PDF</button> <span class="msg" id="pdfm-${esc(r.id)}"></span></div>
       </div></div>`).join("")
@@ -1164,7 +1258,7 @@ function buildPdf(r,p){
       columnStyles:{0:{cellWidth:34},2:{cellWidth:34}}}); y=doc.lastAutoTable.finalY+3.5; };
   kv([["Avión",[p.modelo,p.matricula].filter(Boolean).join(" ")],["Motor",[p.motorModelo,+p.motores===2?"(2)":""].filter(Boolean).join(" ")],
       ["Fecha",fecha.toLocaleDateString("es-AR")],["Hora de carga",fecha.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})],
-      ["Profesor",r.autor],["Estado final",r.clase==="comb"?"No cambia (solo registro)":(r.abierto?EST[r.estado]?.label:(r.seguimiento?.length?"Resuelto":EST[r.estado]?.label))||"-"]]);
+      ...(r.aprobadoPor?[["Cargó (alumno)",r.alumno||r.autor],["Aprobó (profesor)",`${r.aprobadoPor} · ${fmt(r.aprobado)}`]]:[["Profesor",r.autor]]),["Estado final",r.clase==="comb"?"No cambia (solo registro)":(r.abierto?EST[r.estado]?.label:(r.seguimiento?.length?"Resuelto":EST[r.estado]?.label))||"-"]]);
   const d=r.datos||{};
   if(r.clase==="pm"){
     kv([["Motivo",d.motivo],["Trabajo relacionado",d.trabajo],["Supervisó",d.supervisa],["Arranque / corte",[d.horaInicio,d.horaFin].filter(Boolean).join(" / ")],
@@ -1196,7 +1290,7 @@ function buildPdf(r,p){
   doc.autoTable({...base,startY:y,head:[[textHead]],body:[[pdfTxt(r.texto||"-")]],bodyStyles:{minCellHeight:12}}); y=doc.lastAutoTable.finalY+3.5;
   if(r.seguimiento?.length){ doc.autoTable({...base,startY:y,head:[["Seguimiento"]],body:r.seguimiento.map(s=>[pdfTxt(`${fmt(s.fecha)} · ${s.autor}: ${s.accion}${s.nota?" - "+s.nota:""}`)])}); y=doc.lastAutoTable.finalY+3.5; }
   // Firmas
-  const sig=[["Profesor",r.autor]]; if(d.supervisa) sig.push(["Supervisó",d.supervisa]); if(d.verifico) sig.push(["Verificó",d.verifico]);
+  const sig=r.aprobadoPor?[["Alumno",r.alumno||r.autor],["Profesor",r.aprobadoPor]]:[["Profesor",r.autor]]; if(d.supervisa) sig.push(["Supervisó",d.supervisa]); if(d.verifico) sig.push(["Verificó",d.verifico]);
   if(y>262){ doc.addPage(); y=20; }
   y+=12; const colW=(W-2*M)/sig.length;
   sig.forEach(([rol,n],i)=>{ const x=M+i*colW; doc.setDrawColor(...ink); doc.line(x+2,y,x+colW-6,y);
@@ -1228,23 +1322,24 @@ function showSub(sub){
   S.sub=sub;
   document.querySelectorAll("[data-sub]").forEach(el=>el.hidden=el.dataset.sub!==sub);
   $("d-menu").hidden = sub!=="menu";
-  $("sub-back").hidden = sub==="menu" || S.role==="alumno";
+  $("sub-back").hidden = sub==="menu";
   if(sub==="registro"){
     if($("saved-box").hidden){ $("kind-pick").hidden=false; $("entry-form").hidden=true; }
-    $("kind-pick").querySelector(".menu").hidden=!S.canWrite; $("no-write").hidden=S.canWrite;
+    const can=S.canWrite||S.role==="alumno";
+    $("kind-pick").querySelector(".menu").hidden=!can; $("no-write").hidden=can;
   }
   window.scrollTo(0,0);
 }
 function renderMenu(p){
   const n=p.avisosAbiertos||0, docs=(p.manuales||[]).length;
   const T = {
-    registro:["Nuevo registro","Puesta en marcha, mantenimiento u observación"],
+    registro:["Nuevo registro",S.role==="alumno"?"Lo completás y lo aprueba tu profesor":"Puesta en marcha, mantenimiento u observación"],
     historial:["Historial", n?`${n} aviso${n>1?"s":""} activo${n>1?"s":""}`:"Registros y calendario", n?"t-warn":""],
     manuales:["Manuales",`${docs} documento${docs===1?"":"s"}`],
     qr:["Código QR","Etiqueta para imprimir y pegar en el avión"],
     editar:["Datos y límites","Modelo, motores, límites y eliminar avión"]
   };
-  const keys = S.role==="admin" ? ["editar","manuales","qr"] : ["registro","historial","manuales","qr"];
+  const keys = S.role==="admin" ? ["editar","manuales","qr"] : S.role==="alumno" ? ["registro","manuales"] : ["registro","historial","manuales","qr"];
   $("d-menu").innerHTML = keys.map(k=>`<button type="button" class="tile ${T[k][2]||""}" data-go="${k}"><b>${T[k][0]}</b><span>${esc(T[k][1])}</span></button>`).join("");
 }
 $("d-menu").addEventListener("click",e=>{ const b=e.target.closest("[data-go]"); if(b) showSub(b.dataset.go); });
@@ -1307,20 +1402,20 @@ function boot(){
   S.db=DB; S.downloads=DOWNLOADS; S.assets=null;
   $("m-file-box").hidden=true;
   if(!CFG.firebase){ $("banner").hidden=false; $("banner").textContent="Falta configurar Firebase en config.js."; }
-  if(lsGet("bitacora-rol")==="alumno") setRole("alumno");
   route();
   // Al volver a abrir la página, la sesión de Google se recupera sola
   let first=true;
   onAuthStateChanged(auth,async u=>{
     S.uid=u?u.uid:null;
-    if(first){ first=false; const r0=lsGet("bitacora-rol"); if(u && (r0==="profesor"||r0==="admin")) try{ await enterAs(r0,u); }catch(_){} }
-    if(!u && (S.role==="profesor"||S.role==="admin")){ setRole(null); route(); }
+    if(first){ first=false; const r0=lsGet("bitacora-rol"); if(u && (r0==="profesor"||r0==="admin"||r0==="alumno")) try{ await enterAs(r0,u); }catch(_){} }
+    if(!u && S.role){ setRole(null); route(); }
   });
   DB.collection("aviones").onSnapshot(snap=>{
     S.planes=new Map(snap.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
     S.loaded=true;
     $("seed-box").hidden = S.planes.size>0;
     if(S.current) renderDetail(); else renderFleet();
+    if(S.role==="profesor") renderEnvios();
     if(S.role==="admin" && !S.purged){ S.purged=true; purgeOld(); }
   },err=>{ S.loaded=true; $("fleet").innerHTML=`<div class="empty">No se pudo leer la lista de aviones.</div>`; });
 }

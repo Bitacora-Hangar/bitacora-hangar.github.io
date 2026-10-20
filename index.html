@@ -726,6 +726,7 @@ function renderEnvios(){
         <div class="small muted">Cargó ${esc(x.alumno)}${x.alumnoEmail?` (${esc(x.alumnoEmail)})`:""}${r.clase==="comb"?"":` · cómo quedó el avión: ${esc(EST[r.estado]?.label||"")}`}${r.horas?` · ${esc(r.horas)} h`:""}</div>
         <p>${esc(r.texto)}</p>${details(r,p)}
         <div class="row"><input data-rnote="${esc(x.id)}" placeholder="Comentario para el alumno" style="flex:1 1 200px" value="${esc(typing[x.id]||"")}">
+          <button type="button" class="ghost" data-rver="${esc(x.id)}">Ver planilla completa</button>
           <button type="button" class="primary" data-rok="${esc(x.id)}">Aprobar</button><button type="button" class="danger" data-rno="${esc(x.id)}">Rechazar</button></div>
         <span class="msg" id="rm-${esc(x.id)}"></span></div>`;
     }).join("") : `<div class="small muted">No tenés registros para revisar.</div>`;
@@ -738,7 +739,21 @@ function renderEnvios(){
         ${x.nota?`<div class="small"><b>Comentario:</b> ${esc(x.nota)}</div>`:""}</div></div>`; }).join("");
   }
 }
+// Muestra el PDF con todo lo que cargó el alumno, todavía sin aprobar
+function verPlanilla(id){
+  const x=(S.envios||[]).find(v=>v.id===id), mid="rm-"+id; if(!x) return;
+  if(!window.jspdf?.jsPDF) return msg(mid,"No se pudo preparar la planilla. Recargá la página.","err");
+  const p=S.planes.get(x.avionId)||{matricula:x.matricula,limites:{}};
+  const w=window.open("","_blank");
+  try{
+    const url=URL.createObjectURL(buildPdf({...x.rec,alumno:x.alumno,aprobadoPor:`${x.profesor} (todavía sin aprobar)`,aprobado:null},p));
+    if(w) w.location.href=url; else location.href=url;
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(_){ if(w) w.close(); msg(mid,"No se pudo preparar la planilla.","err"); }
+}
 $("review-list").addEventListener("click",async e=>{
+  const v=e.target.closest("[data-rver]");
+  if(v){ verPlanilla(v.dataset.rver); return; }
   const b=e.target.closest("[data-rok],[data-rno]"); if(!b) return;
   const id=b.dataset.rok||b.dataset.rno, x=(S.envios||[]).find(v=>v.id===id); if(!x) return;
   const nota=(document.querySelector(`input[data-rnote="${CSS.escape(id)}"]`)?.value||"").trim(), mid="rm-"+id;
@@ -1269,7 +1284,7 @@ function buildPdf(r,p){
       columnStyles:{0:{cellWidth:34},2:{cellWidth:34}}}); y=doc.lastAutoTable.finalY+3.5; };
   kv([["Avión",[p.modelo,p.matricula].filter(Boolean).join(" ")],["Motor",[p.motorModelo,+p.motores===2?"(2)":""].filter(Boolean).join(" ")],
       ["Fecha",fecha.toLocaleDateString("es-AR")],["Hora de carga",fecha.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})],
-      ...(r.aprobadoPor?[["Cargó (alumno)",r.alumno||r.autor],["Aprobó (profesor)",`${r.aprobadoPor} · ${fmt(r.aprobado)}`]]:[["Profesor",r.autor]]),["Estado final",r.clase==="comb"?"No cambia (solo registro)":(r.abierto?EST[r.estado]?.label:(r.seguimiento?.length?"Resuelto":EST[r.estado]?.label))||"-"]]);
+      ...(r.aprobadoPor?[["Cargó (alumno)",r.alumno||r.autor],["Aprobó (profesor)",r.aprobado?`${r.aprobadoPor} · ${fmt(r.aprobado)}`:r.aprobadoPor]]:[["Profesor",r.autor]]),["Estado final",r.clase==="comb"?"No cambia (solo registro)":(r.abierto?EST[r.estado]?.label:(r.seguimiento?.length?"Resuelto":EST[r.estado]?.label))||"-"]]);
   const d=r.datos||{};
   if(r.clase==="pm"){
     kv([["Motivo",d.motivo],["Trabajo relacionado",d.trabajo],["Supervisó",d.supervisa],["Arranque / corte",[d.horaInicio,d.horaFin].filter(Boolean).join(" / ")],

@@ -454,7 +454,7 @@ details>summary{cursor:pointer;font-weight:600}
 
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {getAuth,GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {getAuth,GoogleAuthProvider,signInWithPopup,signInWithRedirect,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {getFirestore,doc,collection,getDoc,getDocs,setDoc,updateDoc,deleteDoc,addDoc,onSnapshot,query,where,orderBy,limit} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 const CFG = window.APP_CONFIG || {};
 if(!CFG.firebase){
@@ -569,14 +569,27 @@ function setRole(role,name){
   S.current=null;
   if(role==="admin") watchPeople(); else stopPeople();
 }
+// Navegadores dentro de otras apps (WhatsApp, Instagram, lectores de QR): Google bloquea el inicio de sesión
+const UA=navigator.userAgent||"";
+const IN_APP=/FBAN|FBAV|Instagram|WhatsApp|Line\/|Snapchat|TikTok|; wv\)/i.test(UA) || (/iPhone|iPad|iPod/.test(UA) && !/Safari\//.test(UA));
 function showStartPanel(which){ $("req-form").hidden=which!=="req"; $("req-wait").hidden=which!=="wait"; }
 $("go-alumno").addEventListener("click",()=>{ setRole("alumno"); route(); });
 document.querySelectorAll(".door[data-role]").forEach(b=>b.addEventListener("click",async()=>{
   msg("login-msg",""); showStartPanel(null);
+  if(!auth.currentUser && IN_APP){ msg("login-msg","Google no deja iniciar sesión desde el navegador de esta aplicación. Tocá los tres puntos (⋮ o ···) y elegí \"Abrir en el navegador\", o copiá el link y pegalo en Chrome o Safari.","err"); return; }
   try{
     const res = auth.currentUser || (await signInWithPopup(auth,new GoogleAuthProvider())).user;
     await enterAs(b.dataset.role,res);
-  }catch(err){ if(err?.code!=="auth/popup-closed-by-user") msg("login-msg","No se pudo entrar con Google. Probá de nuevo.","err"); }
+  }catch(err){
+    const code=err?.code||"";
+    if(code==="auth/popup-closed-by-user"||code==="auth/cancelled-popup-request") return;
+    // Algunos celulares bloquean la ventana emergente: se entra en la misma pestaña
+    if(code==="auth/popup-blocked"||code==="auth/operation-not-supported-in-this-environment"){
+      lsSet("bitacora-rol",b.dataset.role);
+      try{ await signInWithRedirect(auth,new GoogleAuthProvider()); return; }catch(e2){ err=e2; }
+    }
+    msg("login-msg",`No se pudo entrar con Google (${err?.code||err?.message||"error"}). Probá de nuevo o abrí la página en Chrome o Safari.`,"err");
+  }
 }));
 // Decide qué puede hacer esta cuenta de Google con el rol elegido
 async function enterAs(role,u){

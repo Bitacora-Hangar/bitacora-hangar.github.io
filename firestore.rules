@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    // Mantener esta lista igual a adminEmails en config.js
+    function isAdmin() {
+      return signedIn() && request.auth.token.email_verified == true
+        && request.auth.token.email in ['ADMIN_EMAIL'];
+    }
+    function isProf() {
+      return signedIn() && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))
+        && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.estado == 'aprobado';
+    }
+    function staff() { return isAdmin() || isProf(); }
+
+    // Aviones y manuales: los ve cualquiera (alumnos sin cuenta)
+    match /aviones/{avion} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (isProf() && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['estado', 'avisosAbiertos', 'ultimo', 'manuales']));
+
+      // Registros: solo profesores aprobados y el administrador
+      match /registros/{registro} {
+        allow read: if staff();
+        allow create: if isAdmin() || (isProf() && request.resource.data.autorId == request.auth.uid);
+        allow update: if staff();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // Solicitudes de acceso de profesores
+    match /usuarios/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.estado == 'pendiente'
+        && request.resource.data.email == request.auth.token.email;
+      allow update, delete: if isAdmin();
+    }
+  }
+}

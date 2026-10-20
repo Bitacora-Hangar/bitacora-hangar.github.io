@@ -1,0 +1,1318 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Bitácora del Hangar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+/* Layout: una columna de trabajo (máx. 920px); lista de aviones como tarjetas de placa, ficha de avión con avisos arriba, planilla, bitácora y manuales debajo. */
+:root{
+  --bg:#eceff3; --surface:#ffffff; --surface-2:#f5f7f9; --ink:#16202a; --muted:#5a6775; --line:#d2d9e0;
+  --accent:#d9531e; --accent-ink:#ffffff;
+  --ok:#1e7a4c; --ok-bg:#e3f3ea; --pend:#9a6412; --pend-bg:#fbefd8; --rep:#1c5ca3; --rep-bg:#e1ecf8; --stop:#c22626; --stop-bg:#fbe3e3;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e141a; --surface:#17202a; --surface-2:#1c2733; --ink:#e5ebf0; --muted:#93a1ae; --line:#2b3744;
+  --accent:#ff7b3f; --accent-ink:#1a0d06;
+  --ok:#52c48d; --ok-bg:#16302a; --pend:#e8ac45; --pend-bg:#33291a; --rep:#70aaf0; --rep-bg:#172a42; --stop:#ff6464; --stop-bg:#3a1a1d;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e141a; --surface:#17202a; --surface-2:#1c2733; --ink:#e5ebf0; --muted:#93a1ae; --line:#2b3744;
+  --accent:#ff7b3f; --accent-ink:#1a0d06;
+  --ok:#52c48d; --ok-bg:#16302a; --pend:#e8ac45; --pend-bg:#33291a; --rep:#70aaf0; --rep-bg:#172a42; --stop:#ff6464; --stop-bg:#3a1a1d;
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+.role-alumno .prof-only{display:none!important}
+body:not(.role-admin) .admin-only{display:none!important}
+body:not(.role-profesor):not(.role-admin) .staff-only{display:none!important}
+/* Menú del avión: mosaico de opciones grandes */
+.menu{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.tile{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:18px 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface);min-height:96px}
+.tile b{font-family:var(--display);font-size:1.45rem;letter-spacing:.02em}
+.tile span{font-weight:400;color:var(--muted);font-size:.9rem}
+.tile:hover{border-color:var(--accent)}
+.tile.t-warn span{color:var(--stop);font-weight:600}
+/* Calendario del historial */
+.calhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.calhead b{font-family:var(--display);font-size:1.25rem}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;max-width:420px}
+.cal .dow{font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:center}
+.cal .day{aspect-ratio:1/1;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--mono);font-weight:500;font-size:.85rem;background:var(--surface-2);border:1px solid transparent;border-radius:6px;min-width:0;color:var(--ink)}
+.cal .day small{font-size:.62rem;line-height:1}
+.cal .day.d-ok{background:var(--ok);color:var(--surface)} .cal .day.d-pendiente{background:var(--pend);color:var(--surface)}
+.cal .day.d-reparando{background:var(--rep);color:var(--surface)} .cal .day.d-no_tocar{background:var(--stop);color:var(--surface)}
+.cal .day.today{border-color:var(--accent)} .cal .day.sel{outline:2px solid var(--ink);outline-offset:1px}
+.cal .day:disabled{opacity:1;cursor:default}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.trash-item{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+/* Pantalla de inicio: dos puertas, alumno y profesor */
+.start{display:flex;flex-direction:column;gap:16px;max-width:560px;width:100%;margin:0 auto;padding-top:12px}
+.doors{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.door{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;padding:18px;border-radius:10px;border:1px solid var(--line);background:var(--surface)}
+.door b{font-family:var(--display);font-size:1.6rem;letter-spacing:.02em}
+.door span{font-weight:400;color:var(--muted);font-size:.95rem}
+.door[aria-pressed=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.saved{border-color:var(--ok);background:var(--ok-bg)}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45}
+.wrap{max-width:920px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px}
+.stack{display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.01em;text-wrap:balance;margin:0;line-height:1.1}
+h1{font-size:2rem} h2{font-size:1.45rem} h3{font-size:1.1rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:.875rem}
+a{color:var(--accent)}
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+.brand small{display:block;font-family:var(--mono);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.who{display:flex;flex-direction:column;gap:4px;min-width:0}
+.who label{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:9px 11px;width:100%;min-width:0}
+input[type=checkbox]{width:20px;height:20px;padding:0;accent-color:var(--accent);flex:none}
+textarea{min-height:84px;resize:vertical}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input.out{border-color:var(--stop);background:var(--stop-bg);color:var(--ink)}
+button{font:inherit;font-weight:600;cursor:pointer;border-radius:6px;padding:9px 14px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.ghost{background:transparent}
+button.danger{color:var(--stop);border-color:var(--stop);background:transparent}
+button:disabled{opacity:.55;cursor:not-allowed}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.lbl{font-size:.8rem;font-weight:600;color:var(--muted)}
+.check{display:flex;align-items:center;gap:8px;font-size:.95rem}
+.checks{display:flex;flex-wrap:wrap;gap:8px 18px}
+.banner{border-radius:8px;padding:10px 14px;background:var(--pend-bg);color:var(--ink);border:1px solid var(--pend)}
+.note{font-size:.85rem;color:var(--muted);border-left:3px solid var(--line);padding-left:10px}
+.msg{font-size:.9rem;min-height:1.2em}
+.msg.err{color:var(--stop)} .msg.ok{color:var(--ok)}
+
+/* Tarjetas de avión: placa de matrícula + franja de estado a la izquierda */
+.fleet{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+.plane{display:flex;flex-direction:column;gap:8px;text-decoration:none;color:inherit;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--ok);border-radius:8px;padding:14px;min-width:0}
+.plane:hover{border-color:var(--muted)}
+.plane.s-pendiente{border-left-color:var(--pend)} .plane.s-reparando{border-left-color:var(--rep)} .plane.s-no_tocar{border-left-color:var(--stop)}
+.reg{font-family:var(--display);font-weight:700;font-size:1.7rem;letter-spacing:.04em;line-height:1}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:4px;white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.c-ok{color:var(--ok);background:var(--ok-bg)} .c-pendiente{color:var(--pend);background:var(--pend-bg)} .c-reparando{color:var(--rep);background:var(--rep-bg)} .c-no_tocar{color:var(--stop);background:var(--stop-bg)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:10px}
+
+/* Ficha */
+.back{align-self:flex-start;text-decoration:none;font-weight:600}
+.head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start}
+.head .reg{font-size:2.6rem}
+.alerts{display:flex;flex-direction:column;gap:10px}
+.alert{border-radius:8px;padding:12px 14px;display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);background:var(--surface-2);min-width:0}
+/* Aviso NO TOCAR con estilo de tarjeta roja de taller */
+.alert.a-no_tocar{background:var(--stop);border-color:var(--stop);color:#fff}
+.alert.a-no_tocar .chip{background:#fff;color:#c22626}
+.alert.a-no_tocar .muted{color:rgba(255,255,255,.85)}
+.alert.a-no_tocar input{background:rgba(255,255,255,.95);color:#16202a;border-color:transparent}
+.alert.a-no_tocar button{background:#fff;color:#16202a;border-color:#fff}
+.alert.a-pendiente{border-left:5px solid var(--pend)} .alert.a-reparando{border-left:5px solid var(--rep)}
+.alert p,.entry p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* Selector de planilla */
+.tabs{display:flex;flex-wrap:wrap;gap:6px}
+.tabs button{border-radius:999px;padding:7px 14px}
+.tabs button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.sheet{display:flex;flex-direction:column;gap:14px}
+.block{display:flex;flex-direction:column;gap:10px;padding-top:12px;border-top:1px solid var(--line)}
+/* Tabla de parámetros por motor */
+.tblwrap{overflow-x:auto;min-width:0}
+table.eng{border-collapse:collapse;width:100%;min-width:420px}
+table.eng th,table.eng td{padding:6px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+table.eng th{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+table.eng td.lim{font-family:var(--mono);font-size:.78rem;color:var(--muted);white-space:nowrap}
+table.eng td input[type=text]{max-width:120px;font-family:var(--mono);padding:7px 9px}
+table.eng td.calc{font-family:var(--mono)}
+table.eng td.calc.out{color:var(--stop);font-weight:600}
+.parts{display:flex;flex-direction:column;gap:8px}
+.part{display:grid;grid-template-columns:1.2fr 1.5fr 1fr .6fr 1fr auto;gap:6px;align-items:center}
+@media (max-width:640px){.part{grid-template-columns:1fr 1fr}.part button{grid-column:1/-1}}
+.outbox{border-radius:8px;padding:10px 12px;background:var(--stop-bg);color:var(--ink);border:1px solid var(--stop);font-size:.9rem}
+
+.log{display:flex;flex-direction:column}
+.entry{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line)}
+.entry:first-child{border-top:0}
+.entry .when{font-family:var(--mono);font-size:.8rem;color:var(--muted);white-space:nowrap}
+.entry .body{min-width:0;display:flex;flex-direction:column;gap:4px}
+.kv{display:flex;flex-wrap:wrap;gap:2px 14px;font-size:.88rem}
+.kv span b{font-weight:600}
+.mini{border-collapse:collapse;font-size:.82rem;font-family:var(--mono)}
+.mini th,.mini td{padding:2px 10px 2px 0;text-align:left;white-space:nowrap}
+.mini th{font-family:var(--body);color:var(--muted);font-weight:600}
+.mini .out{color:var(--stop);font-weight:600}
+.trail{font-size:.85rem;color:var(--muted);display:flex;flex-direction:column;gap:2px}
+.manuals{display:flex;flex-direction:column;gap:14px}
+.mgroup{display:flex;flex-direction:column}
+.manual{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line);min-width:0}
+.mgroup h3+.manual{border-top:0}
+.manual a{font-weight:600;overflow-wrap:anywhere;min-width:0}
+.qrbox{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
+.qrbox img{width:220px;max-width:100%;border:1px solid var(--line);border-radius:8px;background:#fff}
+.qrside{display:flex;flex-direction:column;gap:10px;min-width:0;flex:1 1 220px}
+.linkbox{font-family:var(--mono);font-size:.8rem;overflow-wrap:anywhere;background:var(--surface-2);padding:8px;border-radius:6px;user-select:all}
+details>summary{cursor:pointer;font-weight:600}
+@media (max-width:480px){.entry{grid-template-columns:1fr}.head .reg{font-size:2.1rem}}
+@media (prefers-reduced-motion:no-preference){button,.plane{transition:border-color .15s,opacity .15s}}
+</style>
+
+<script src="config.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><small>Taller · Registro técnico</small><h1>Bitácora del Hangar</h1></div>
+    <div class="who" id="who-box" hidden>
+      <span id="who-role" class="lbl">Profesor</span>
+      <div class="row" style="gap:8px"><b id="who-txt"></b><button type="button" id="logout" class="ghost small">Salir</button></div>
+    </div>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+
+  <!-- Inicio: elegir alumno o profesor -->
+  <section id="view-start" class="start" hidden>
+    <h2>¿Cómo entrás?</h2>
+    <div class="doors">
+      <button type="button" class="door" id="go-alumno"><b>Alumno</b><span>Ver los manuales de cada avión.</span></button>
+      <button type="button" class="door" id="go-prof" data-role="profesor" aria-pressed="false"><b>Profesor</b><span>Entrá con tu cuenta de Google. La primera vez el administrador tiene que aprobarte.</span></button>
+      <button type="button" class="door" id="go-admin" data-role="admin" aria-pressed="false"><b>Administrador</b><span>Entrá con tu cuenta de Google. Aviones, datos, límites y profesores.</span></button>
+    </div>
+    <span id="login-msg" class="msg"></span>
+    <!-- Solicitud de acceso de un profesor nuevo -->
+    <form id="req-form" class="panel" hidden>
+      <b class="lbl">Pedir acceso como profesor</b>
+      <div class="small">Entraste como <b id="req-email"></b>. El administrador recibe tu solicitud por mail y la acepta o la rechaza.</div>
+      <div class="field"><label for="req-name">Nombre y apellido (así va a figurar en los registros)</label><input id="req-name" autocomplete="name"></div>
+      <div class="row"><button class="primary" type="submit">Enviar solicitud</button><button type="button" class="ghost" data-signout>Usar otra cuenta</button><span id="req-msg" class="msg"></span></div>
+    </form>
+    <div id="req-wait" class="panel" hidden>
+      <b id="req-wait-title">Solicitud enviada</b>
+      <div id="req-wait-txt" class="small"></div>
+      <div class="row"><button type="button" class="ghost" data-signout>Salir</button></div>
+    </div>
+  </section>
+
+  <!-- Lista de aviones -->
+  <section id="view-list" class="stack" hidden>
+    <div class="row" style="justify-content:space-between">
+      <h2>Aviones</h2>
+      <input id="search" type="search" placeholder="Buscar matrícula o modelo" style="max-width:280px">
+    </div>
+    <div id="fleet" class="fleet"><div class="empty">Cargando aviones…</div></div>
+    <details id="add-box" class="panel admin-only">
+      <summary>Agregar avión</summary>
+      <form id="add-form" class="grid2">
+        <div class="field"><label for="add-reg">Matrícula *</label><input id="add-reg" required placeholder="LV-ABC" autocapitalize="characters"></div>
+        <div class="field"><label for="add-model">Modelo</label><input id="add-model" placeholder="Cessna 152"></div>
+        <div class="field"><label for="add-eng">Motores</label><select id="add-eng"><option value="1">1 motor</option><option value="2">2 motores</option></select></div>
+        <div class="field"><label for="add-notes">Notas</label><input id="add-notes" placeholder="Opcional"></div>
+        <div class="row" style="grid-column:1/-1"><button class="primary" type="submit">Agregar</button><span id="add-msg" class="msg"></span></div>
+      </form>
+    </details>
+    <div id="people" class="panel admin-only">
+      <h2>Profesores</h2>
+      <div id="people-pend"></div>
+      <details><summary>Profesores con acceso</summary><div id="people-ok"></div></details>
+      <div id="seed-box" class="note" hidden>La base está vacía. <button type="button" id="seed-btn">Cargar los aviones iniciales</button> <span id="seed-msg" class="msg"></span></div>
+    </div>
+    <div id="trash" class="panel admin-only" hidden>
+      <h2>Eliminados</h2>
+      <div class="small muted">Se guardan 30 días con todo su historial y se pueden restaurar. Después se borran solos.</div>
+      <div id="trash-list"></div>
+    </div>
+  </section>
+
+  <!-- Ficha de un avión -->
+  <section id="view-detail" class="stack" hidden>
+    <a href="#" class="back" id="back">← Todos los aviones</a>
+    <div id="d-missing" class="empty" hidden>No encontré este avión. Puede que lo hayan borrado.</div>
+    <div id="d-main" class="stack">
+      <div class="head">
+        
+        <div style="min-width:0"><div id="d-reg" class="reg mono"></div><div id="d-model" class="muted"></div><div id="d-notes" class="small muted"></div></div>
+        <span id="d-status" class="chip c-ok staff-only">Operativo</span>
+      </div>
+
+      <div id="d-menu" class="menu"></div>
+      <a href="#" id="sub-back" class="back" hidden>← Volver al menú del avión</a>
+
+      <div data-sub="registro" class="stack" hidden>
+      <div id="saved-box" class="panel saved" hidden>
+        <b id="saved-txt">Registro guardado.</b>
+        <div class="small">Descargá el PDF para imprimirlo y archivarlo en la carpeta del avión.</div>
+        <div class="row"><button type="button" class="primary" id="saved-pdf">Descargar PDF</button><button type="button" class="ghost" id="saved-close">Cargar otro registro</button><span id="saved-msg" class="msg"></span></div>
+      </div>
+        <div id="kind-pick" class="stack">
+          <h2>Nuevo registro</h2>
+          <div class="menu">
+            <button type="button" class="tile" data-pick="pm"><b>Puesta en marcha</b><span>Prueba de motor en tierra, con valores y límites.</span></button>
+            <button type="button" class="tile" data-pick="mant"><b>Mantenimiento</b><span>Trabajo realizado, referencia, repuestos y verificación.</span></button>
+            <button type="button" class="tile" data-pick="obs"><b>Observación</b><span>Algo que se encontró y el próximo tiene que saber.</span></button>
+            <button type="button" class="tile" data-pick="comb"><b>Carga de combustible</b><span>Solo registro: no cambia el estado del avión.</span></button>
+          </div>
+          <div id="no-write" class="banner" hidden>No tenés permiso para cargar registros. Pedile al dueño acceso de edición.</div>
+        </div>
+      <form id="entry-form" class="panel" novalidate hidden>
+        <div class="row" style="justify-content:space-between"><h2 id="form-title">Puesta en marcha</h2><button type="button" id="kind-change" class="ghost small">Cambiar tipo</button></div>
+
+        <!-- Planilla de puesta en marcha -->
+        <div id="sheet-pm" class="sheet">
+          <div class="grid3">
+            <div class="field"><label for="pm-motivo">Motivo</label>
+              <select id="pm-motivo"><option>Rutina</option><option>Después de mantenimiento</option><option>Instrucción</option><option>Otro</option></select></div>
+            <div class="field"><label for="pm-trabajo">Trabajo relacionado</label><input id="pm-trabajo" placeholder="Si es después de un mantenimiento"></div>
+            <div class="field"><label for="pm-sup">Supervisó</label><input id="pm-sup" placeholder="Instructor a cargo"></div>
+            <div class="field"><label for="pm-hi">Hora de arranque</label><input id="pm-hi" type="time"></div>
+            <div class="field"><label for="pm-hf">Hora de corte</label><input id="pm-hf" type="time"></div>
+            <div class="field"><label for="pm-oat">Temp. exterior (°C)</label><input id="pm-oat" inputmode="decimal"></div>
+            <div class="field"><label for="pm-hob1">Horómetro al inicio</label><input id="pm-hob1" inputmode="decimal" class="mono"></div>
+            <div class="field"><label for="pm-hob2">Horómetro al final</label><input id="pm-hob2" inputmode="decimal" class="mono"></div>
+            <div class="field"><label for="pm-fuel">Combustible a bordo</label><input id="pm-fuel" placeholder="Ej.: 80 gal 100LL"></div>
+          </div>
+          <div class="block">
+            <span class="lbl">Antes de arrancar</span>
+            <div class="checks">
+              <label class="check"><input type="checkbox" id="pm-c-calzas"> Calzas puestas</label>
+              <label class="check"><input type="checkbox" id="pm-c-ext"> Extintor a mano</label>
+              <label class="check"><input type="checkbox" id="pm-c-area"> Área despejada</label>
+              <label class="check"><input type="checkbox" id="pm-c-viento"> Proa al viento</label>
+              <label class="check"><input type="checkbox" id="pm-c-frenos"> Frenos aplicados</label>
+            </div>
+          </div>
+          <div class="block">
+            <span class="lbl">Valores medidos (los que salen de límite se marcan en rojo)</span>
+            <div class="tblwrap"><table class="eng" id="pm-table"></table></div>
+            <div class="grid3">
+              <div class="field"><label for="pm-vac">Succión / vacío (inHg)</label><input id="pm-vac" inputmode="decimal" class="mono"></div>
+            </div>
+            <label class="check"><input type="checkbox" id="pm-c-fugas"> Después del corte: sin fugas de aceite ni combustible</label>
+            <div id="pm-limsrc" class="note"></div>
+            <div id="pm-out" class="outbox" hidden></div>
+          </div>
+        </div>
+
+        <!-- Planilla de mantenimiento -->
+        <div id="sheet-mant" class="sheet" hidden>
+          <div class="grid3">
+            <div class="field"><label for="mt-tipo">Tipo de trabajo</label>
+              <select id="mt-tipo">
+                <option>Preventivo</option><option>Correctivo / reparación</option>
+                <option>Inspección 25/50 h</option><option>Inspección 100 h</option><option>Inspección anual (habilitación)</option>
+                <option>Directiva de aeronavegabilidad (AD)</option><option>Boletín de servicio (SB)</option><option>Alteración</option><option>Otro</option>
+              </select></div>
+            <div class="field"><label for="mt-sis">Sistema</label>
+              <select id="mt-sis"></select></div>
+            <div class="field"><label for="mt-ref">Referencia técnica</label><input id="mt-ref" list="ref-list" placeholder="Manual, sección, página, AD o SB"></div>
+            <div class="field"><label for="mt-hc">Horas totales de célula</label><input id="mt-hc" inputmode="decimal" class="mono"></div>
+            <div class="field" id="mt-hm-wrap"></div>
+            <div class="field"><label for="mt-ver">Verificó (inspector)</label><input id="mt-ver" placeholder="Doble firma en tareas críticas"></div>
+          </div>
+          <div class="field"><label for="mt-motivo">Motivo o discrepancia encontrada</label><input id="mt-motivo" placeholder="Ej.: caída de magneto R alta en la última puesta en marcha"></div>
+          <div class="block">
+            <div class="row" style="justify-content:space-between"><span class="lbl">Repuestos usados</span><button type="button" id="mt-addpart" class="ghost small">Agregar repuesto</button></div>
+            <div id="mt-parts" class="parts"></div>
+          </div>
+          <div class="grid2">
+            <label class="check"><input type="checkbox" id="mt-prueba"> Se hizo prueba funcional / de motor</label>
+            <div class="field"><label for="mt-pend">Pendientes o diferidos</label><input id="mt-pend" placeholder="Lo que quedó sin hacer"></div>
+          </div>
+          <div class="note">Esta bitácora es interna del taller. El asiento oficial sigue yendo en el historial del avión y, cuando corresponde, en el formulario DA 337, firmado por personal habilitado.</div>
+        </div>
+
+        <!-- Planilla de carga de combustible: solo registro -->
+        <div id="sheet-comb" class="sheet" hidden>
+          <div class="grid3">
+            <div class="field"><label for="cb-tipo">Combustible *</label>
+              <select id="cb-tipo"><option>100LL</option><option>UL91</option><option>Nafta de auto</option><option>Otro</option></select></div>
+            <div class="field" id="cb-otro-wrap" hidden><label for="cb-otro">¿Cuál?</label><input id="cb-otro"></div>
+            <div class="field"><label for="cb-lt">Litros cargados *</label><input id="cb-lt" inputmode="decimal" class="mono"></div>
+            <div class="field"><label for="cb-izq">Tanque izq. (L)</label><input id="cb-izq" inputmode="decimal" class="mono" placeholder="Opcional"></div>
+            <div class="field"><label for="cb-der">Tanque der. (L)</label><input id="cb-der" inputmode="decimal" class="mono" placeholder="Opcional"></div>
+            <div class="field"><label for="cb-hob">Horómetro</label><input id="cb-hob" inputmode="decimal" class="mono"></div>
+            <div class="field"><label for="cb-orig">Origen</label>
+              <select id="cb-orig"><option>Surtidor</option><option>Tambor</option><option>Estación de servicio</option><option>Proveedor</option><option>Otro</option></select></div>
+            <div class="field"><label for="cb-lote">Lote o remito</label><input id="cb-lote" placeholder="Opcional"></div>
+            <div class="field"><label for="cb-ver">Verificó</label><input id="cb-ver" placeholder="Opcional"></div>
+            <div class="field"><label for="cb-costo">Costo</label><input id="cb-costo" placeholder="Opcional"></div>
+          </div>
+          <label class="check"><input type="checkbox" id="cb-tope"> Se llenó a tope (sirve para calcular el consumo)</label>
+          <div class="block">
+            <span class="lbl">Controles</span>
+            <div class="checks">
+              <label class="check"><input type="checkbox" id="cb-c-tierra"> Puesta a tierra conectada</label>
+              <label class="check"><input type="checkbox" id="cb-c-motor"> Motores apagados</label>
+              <label class="check"><input type="checkbox" id="cb-c-ext"> Extintor a mano</label>
+              <label class="check"><input type="checkbox" id="cb-c-tapas"> Tapas cerradas y verificadas</label>
+            </div>
+            <div class="field"><label for="cb-muestra">Muestra de drenaje</label><input id="cb-muestra" placeholder="Color, agua, partículas (opcional)"></div>
+          </div>
+        </div>
+
+        <div class="grid2" style="align-items:end" id="state-wrap">
+          <div class="field"><label for="e-state">Cómo quedó el avión</label>
+            <select id="e-state">
+              <option value="ok">Todo en orden</option>
+              <option value="pendiente">Hay algo por arreglar</option>
+              <option value="reparando">Se está arreglando</option>
+              <option value="no_tocar">No tocar</option>
+            </select></div>
+        </div>
+        <div class="field"><label for="e-text" id="e-text-lbl">Observaciones</label><textarea id="e-text"></textarea></div>
+        <div class="row"><button class="primary" type="submit">Guardar registro</button><span id="e-msg" class="msg"></span></div>
+      </form>
+      <datalist id="ref-list"></datalist>
+      </div>
+
+      <div data-sub="historial" class="stack" hidden>
+      <div class="panel">
+        <h2>Avisos activos</h2>
+        <div id="d-alerts" class="alerts"></div>
+      </div>
+
+        <div class="panel">
+          <div class="calhead"><button type="button" class="ghost small" id="cal-prev" aria-label="Mes anterior">←</button><b id="cal-title"></b><button type="button" class="ghost small" id="cal-next" aria-label="Mes siguiente">→</button></div>
+          <div id="cal" class="cal"></div>
+          <div class="legend"><span><i style="background:var(--ok)"></i>Todo en orden</span><span><i style="background:var(--pend)"></i>Por arreglar</span><span><i style="background:var(--rep)"></i>En reparación</span><span><i style="background:var(--stop)"></i>No tocar</span></div>
+          <div class="small muted">Tocá un día con color para ver solo esos registros.</div>
+        </div>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between"><h2>Historial</h2><span id="log-filter" class="small"></span></div>
+        <div id="d-log" class="log"></div>
+      </div>
+      </div>
+
+      <div data-sub="manuales" class="stack" hidden>
+      <div class="panel">
+        <h2>Manuales</h2>
+        <div id="d-manuals" class="manuals"></div>
+        <details class="staff-only">
+          <summary>Agregar manual por enlace</summary>
+          <form id="m-link-form" class="grid2" style="margin-top:10px">
+            <div class="field"><label for="m-title">Título</label><input id="m-title" required placeholder="Manual de vuelo (POH)"></div>
+            <div class="field"><label for="m-url">Enlace (Drive, web, etc.)</label><input id="m-url" required type="url" placeholder="https://…"></div>
+            <div class="row" style="grid-column:1/-1"><button type="submit">Agregar enlace</button><span id="m-link-msg" class="msg"></span></div>
+          </form>
+        </details>
+        <details id="m-file-box" class="staff-only" hidden>
+          <summary>Subir manual en PDF</summary>
+          <form id="m-file-form" class="grid2" style="margin-top:10px">
+            <div class="field"><label for="m-ftitle">Título</label><input id="m-ftitle" required placeholder="Manual de mantenimiento"></div>
+            <div class="field"><label for="m-file">Archivo (PDF o imagen, hasta 20 MB)</label><input id="m-file" type="file" required accept="application/pdf,image/png,image/jpeg,image/webp"></div>
+            <div class="row" style="grid-column:1/-1"><button type="submit">Subir</button><span id="m-file-msg" class="msg"></span></div>
+          </form>
+        </details>
+      </div>
+      </div>
+
+      <div data-sub="qr" class="stack" hidden>
+      <div class="panel">
+        <h2>Código QR</h2>
+        <div id="d-qr" class="qrbox"></div>
+      </div>
+      </div>
+
+      <div data-sub="editar" class="stack" hidden>
+      <div class="panel" id="edit-box">
+        <h2>Datos y límites</h2>
+        <form id="edit-form" class="stack" style="gap:12px">
+          <div class="grid3">
+            <div class="field"><label for="ed-model">Modelo</label><input id="ed-model"></div>
+            <div class="field"><label for="ed-motor">Motor</label><input id="ed-motor" placeholder="Ej.: Lycoming IO-540"></div>
+            <div class="field"><label for="ed-eng">Motores</label><select id="ed-eng"><option value="1">1 motor</option><option value="2">2 motores</option></select></div>
+            <div class="field" style="grid-column:1/-1"><label for="ed-notes">Notas</label><input id="ed-notes"></div>
+          </div>
+          <span class="lbl">Límites para la puesta en marcha (dejar vacío si no aplica)</span>
+          <div class="grid3" id="ed-lims"></div>
+          <div class="field"><label for="ed-limsrc">De dónde salen los límites</label><input id="ed-limsrc" placeholder="Manual, figura y página"></div>
+          <div class="row"><button type="submit">Guardar cambios</button><span id="ed-msg" class="msg"></span></div>
+        </form>
+        <div class="row"><button id="del-btn" type="button" class="danger">Eliminar avión</button><span id="del-msg" class="msg"></span></div>
+      </div>
+      </div>
+    </div>
+  </section>
+</div>
+<div id="qr-scratch" hidden></div>
+
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getAuth,GoogleAuthProvider,signInWithPopup,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {getFirestore,doc,collection,getDoc,getDocs,setDoc,updateDoc,deleteDoc,addDoc,onSnapshot,query,where,orderBy,limit} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+const CFG = window.APP_CONFIG || {};
+if(!CFG.firebase){
+  const b=document.getElementById("banner"); b.hidden=false;
+  b.textContent="La app todavía no está conectada a Firebase: falta completar config.js.";
+  throw new Error("Falta firebase en config.js");
+}
+const fbApp = initializeApp(CFG.firebase||{});
+const auth = getAuth(fbApp), fs = getFirestore(fbApp);
+// Adaptador: la misma forma de base de datos que usaba la versión anterior, sobre Firestore
+const wrapDoc = d => ({id:d.id, exists:d.exists(), data:()=>d.data(), metadata:d.metadata});
+const wrapQ = q => ({docs:q.docs.map(wrapDoc), size:q.size, empty:q.empty});
+function dref(path){ const r=doc(fs,path); return {id:r.id,path,
+  get:async()=>wrapDoc(await getDoc(r)), set:d=>setDoc(r,d), update:d=>updateDoc(r,d), delete:()=>deleteDoc(r),
+  onSnapshot:(n,e)=>onSnapshot(r,x=>n(wrapDoc(x)),e), collection:c=>cref(path+"/"+c)}; }
+function qref(path,cons){ const build=()=>query(collection(fs,path),...cons); return {
+  where:(f,o,v)=>qref(path,[...cons,where(f,o,v)]), orderBy:(f,d)=>qref(path,[...cons,orderBy(f,d||"asc")]), limit:n=>qref(path,[...cons,limit(n)]),
+  get:async()=>wrapQ(await getDocs(build())), onSnapshot:(n,e)=>onSnapshot(build(),x=>n(wrapQ(x)),e)}; }
+function cref(path){ return {...qref(path,[]), path, doc:id=>id?dref(path+"/"+id):dref(path+"/"+doc(collection(fs,path)).id),
+  add:async d=>{ const r=await addDoc(collection(fs,path),d); return dref(path+"/"+r.id); }}; }
+const DB = {doc:dref, collection:cref};
+// Descarga directa del navegador (en lugar del permiso de descargas de claude.ai)
+const DOWNLOADS = {save:async({filename,data})=>{ const a=document.createElement("a"); a.href=URL.createObjectURL(data); a.download=filename;
+  document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),10000); }};
+const isAdminEmail = u => !!u && u.emailVerified && (CFG.adminEmails||[]).map(x=>x.toLowerCase()).includes((u.email||"").toLowerCase());
+
+// Enlace público de esta página; el QR apunta aquí + "#<id del avión>".
+const APP_URL = location.origin + location.pathname;
+
+const EST = {
+  ok:{label:"Operativo",rank:0},
+  pendiente:{label:"Por arreglar",rank:1},
+  reparando:{label:"En reparación",rank:2},
+  no_tocar:{label:"No tocar",rank:3}
+};
+const KINDS = {pm:"Puesta en marcha",mant:"Mantenimiento",obs:"Observación",comb:"Carga de combustible"};
+const CB_CHECKS = [["tierra","Puesta a tierra"],["motor","Motores apagados"],["ext","Extintor"],["tapas","Tapas cerradas"]];
+const SISTEMAS = ["Motor","Hélice","Combustible","Aceite","Tren, ruedas y frenos","Hidráulico","Controles de vuelo","Instrumentos","Eléctrico","Calefacción y ventilación","Estructura / ala / fuselaje","Interior","Otro"];
+// Límites configurables por avión (claves guardadas en aviones/<id>.limites)
+const LIMS = [
+  ["aceitePresMin","Presión aceite mín. (psi)"],["aceitePresMax","Presión aceite máx. (psi)"],["aceitePresRalentiMin","Presión aceite ralentí mín. (psi)"],
+  ["aceiteTempMax","Temp. aceite máx. (°C)"],["chtMax","CHT máx. (°C)"],
+  ["combPresMin","Presión combustible mín. (psi)"],["combPresMax","Presión combustible máx. (psi)"],
+  ["rpmMax","RPM máx."],["caidaMagMax","Caída de magneto máx. (RPM)"],["difMagMax","Diferencia L–R máx. (RPM)"],
+  ["vacioMin","Succión mín. (inHg)"],["vacioMax","Succión máx. (inHg)"]
+];
+// Filas de la planilla de puesta en marcha, una columna por motor
+const PM = [
+  {k:"aceiteQts",l:"Aceite antes (qts)",t:"n"},
+  {k:"p30",l:"Presión de aceite antes de 30 s",t:"c"},
+  {k:"rpmCal",l:"RPM de calentamiento",t:"n"},
+  {k:"pAceite",l:"Presión de aceite (psi)",t:"n",min:"aceitePresMin",max:"aceitePresMax"},
+  {k:"pAceiteRal",l:"Presión de aceite en ralentí (psi)",t:"n",min:"aceitePresRalentiMin"},
+  {k:"tAceite",l:"Temperatura de aceite (°C)",t:"n",max:"aceiteTempMax"},
+  {k:"cht",l:"CHT (°C)",t:"n",max:"chtMax"},
+  {k:"pComb",l:"Presión de combustible (psi)",t:"n",min:"combPresMin",max:"combPresMax"},
+  {k:"rpmMag",l:"RPM para prueba de magnetos",t:"n"},
+  {k:"caidaL",l:"Caída magneto L (RPM)",t:"n",max:"caidaMagMax"},
+  {k:"caidaR",l:"Caída magneto R (RPM)",t:"n",max:"caidaMagMax"},
+  {k:"dif",l:"Diferencia L–R (RPM)",t:"calc",max:"difMagMax"},
+  {k:"rpmRal",l:"RPM de ralentí",t:"n"},
+  {k:"rpmEst",l:"RPM máximas estáticas",t:"n",max:"rpmMax"},
+  {k:"helice",l:"Hélice: ciclado y gobernador OK",t:"c"},
+  {k:"gen",l:"Generador cargando",t:"c"},
+  {k:"deadMag",l:"Prueba de masa de magnetos OK",t:"c"}
+];
+const SAFETY = [["calzas","Calzas"],["ext","Extintor"],["area","Área despejada"],["viento","Proa al viento"],["frenos","Frenos"]];
+
+const S = {db:null,user:null,uid:null,canWrite:true,assets:null,downloads:null,
+  planes:new Map(),loaded:false,current:null,logUnsub:null,log:[],qrFor:null,kind:"pm",builtFor:null};
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt = iso => { try{ return new Date(iso).toLocaleString("es-AR",{dateStyle:"short",timeStyle:"short"}) }catch(e){ return iso } };
+const now = () => new Date().toISOString();
+const num = v => { const s=String(v??"").trim().replace(",","."); if(s==="") return null; const n=Number(s); return isFinite(n)?n:null; };
+const isNum = v => typeof v==="number" && isFinite(v);
+function msg(id,text,kind){ const el=$(id); if(!el) return; el.textContent=text||""; el.className="msg"+(kind?" "+kind:""); }
+function lsGet(k){ try{return localStorage.getItem(k)||""}catch(e){return ""} }
+function lsSet(k,v){ try{localStorage.setItem(k,v)}catch(e){} }
+function slug(reg){ return "av-"+reg.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,""); }
+function myName(){ return (S.role==="profesor"||S.role==="admin") ? (S.prof||"") : ""; }
+function needName(msgId){ if(myName()) return true; msg(msgId,"Entrá como profesor para guardar.","err"); return false; }
+function writeErr(e){
+  if(e && e.code==="invalid_argument") return "No tenés permiso para guardar en esta bitácora. Pedile al dueño que te dé acceso de edición.";
+  if(e && e.code==="quota_exceeded") return "Se llenó el espacio de la bitácora.";
+  return "No se pudo guardar. Probá de nuevo.";
+}
+function engines(p){ return (p&&+p.motores===2) ? [["izq","Motor izq."],["der","Motor der."]] : [["m","Motor"]]; }
+function limText(p,lim){
+  const L=(lim&&lim.min&&isNum(p?.limites?.[lim.min]))?p.limites[lim.min]:null, H=(lim&&lim.max&&isNum(p?.limites?.[lim.max]))?p.limites[lim.max]:null;
+  if(L!==null&&H!==null) return `${L}–${H}`; if(L!==null) return `mín. ${L}`; if(H!==null) return `máx. ${H}`; return "";
+}
+function outOf(p,row,v){
+  if(!isNum(v)) return false; const l=p?.limites||{};
+  if(row.min && isNum(l[row.min]) && v<l[row.min]) return true;
+  if(row.max && isNum(l[row.max]) && v>l[row.max]) return true;
+  return false;
+}
+
+/* ---------- Ingreso ----------
+   Alumno: sin cuenta, solo manuales.
+   Profesor: cuenta de Google aprobada por el administrador (colección "usuarios").
+   Administrador: cuenta de Google listada en config.js (adminEmails). */
+const ROLE_LABEL = {alumno:"Alumno",profesor:"Profesor",admin:"Administrador"};
+function setRole(role,name){
+  S.role=role; S.prof=name||""; S.canWrite = role==="profesor"||role==="admin";
+  lsSet("bitacora-rol",role||"");
+  ["alumno","profesor","admin"].forEach(r=>document.body.classList.toggle("role-"+r,role===r));
+  $("who-box").hidden=!role;
+  $("who-role").textContent = ROLE_LABEL[role]||"";
+  $("who-txt").textContent = role==="alumno"?"Solo lectura de manuales":S.prof;
+  S.current=null;
+  if(role==="admin") watchPeople(); else stopPeople();
+}
+function showStartPanel(which){ $("req-form").hidden=which!=="req"; $("req-wait").hidden=which!=="wait"; }
+$("go-alumno").addEventListener("click",()=>{ setRole("alumno"); route(); });
+document.querySelectorAll(".door[data-role]").forEach(b=>b.addEventListener("click",async()=>{
+  msg("login-msg",""); showStartPanel(null);
+  try{
+    const res = auth.currentUser || (await signInWithPopup(auth,new GoogleAuthProvider())).user;
+    await enterAs(b.dataset.role,res);
+  }catch(err){ if(err?.code!=="auth/popup-closed-by-user") msg("login-msg","No se pudo entrar con Google. Probá de nuevo.","err"); }
+}));
+// Decide qué puede hacer esta cuenta de Google con el rol elegido
+async function enterAs(role,u){
+  if(role==="admin"){
+    if(!isAdminEmail(u)){ msg("login-msg",`La cuenta ${u.email} no es de administrador.`,"err"); return; }
+    setRole("admin",u.displayName||u.email); route(); return;
+  }
+  if(isAdminEmail(u)){ setRole("profesor",u.displayName||u.email); route(); return; }
+  const snap=await DB.doc("usuarios/"+u.uid).get();
+  const d=snap.exists?snap.data():null;
+  if(d && d.estado==="aprobado"){ setRole("profesor",d.nombre||u.displayName); route(); return; }
+  S.pendingUser=u;
+  if(!d){ $("req-email").textContent=u.email; $("req-name").value=u.displayName||""; showStartPanel("req"); return; }
+  $("req-wait-title").textContent = d.estado==="rechazado" ? "Solicitud rechazada" : "Solicitud enviada";
+  $("req-wait-txt").textContent = d.estado==="rechazado"
+    ? `El administrador rechazó el acceso de ${u.email}. Si es un error, hablá con él.`
+    : `Pediste acceso el ${fmt(d.fecha)} con ${u.email}. Cuando el administrador la apruebe vas a poder entrar como profesor.`;
+  showStartPanel("wait");
+}
+$("req-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const u=S.pendingUser, nombre=$("req-name").value.trim().replace(/\s+/g," ");
+  if(!u) return; if(nombre.length<3) return msg("req-msg","Escribí tu nombre y apellido.","err");
+  try{
+    const fecha=now();
+    await DB.doc("usuarios/"+u.uid).set({nombre,email:u.email,estado:"pendiente",fecha});
+    // Aviso por mail al administrador (script de Google configurado en config.js)
+    if(CFG.mailWebhook){ try{ await fetch(CFG.mailWebhook,{method:"POST",mode:"no-cors",body:JSON.stringify({nombre,email:u.email,fecha,app:APP_URL})}); }catch(_){} }
+    await enterAs("profesor",u);
+  }catch(err){ msg("req-msg","No se pudo enviar la solicitud. Probá de nuevo.","err"); }
+});
+document.querySelectorAll("[data-signout]").forEach(b=>b.addEventListener("click",async()=>{ await signOut(auth); showStartPanel(null); }));
+$("logout").addEventListener("click",async()=>{
+  const was=S.role; setRole(null); showStartPanel(null);
+  if(was!=="alumno") try{ await signOut(auth); }catch(_){}
+  $("saved-box").hidden=true; route();
+});
+
+/* ---------- Administrador: solicitudes de profesores ---------- */
+function watchPeople(){
+  if(S.peopleUnsub) return;
+  S.peopleUnsub=DB.collection("usuarios").onSnapshot(snap=>{ S.people=snap.docs.map(d=>({id:d.id,...d.data()})); renderPeople(); },()=>{});
+}
+function stopPeople(){ if(S.peopleUnsub){ S.peopleUnsub(); S.peopleUnsub=null; } }
+function renderPeople(){
+  const ps=S.people||[], pend=ps.filter(p=>p.estado==="pendiente"), ok=ps.filter(p=>p.estado==="aprobado");
+  $("people-pend").innerHTML = pend.length ? pend.map(p=>`<div class="trash-item"><span><b>${esc(p.nombre)}</b><br><span class="small muted">${esc(p.email)} · pidió acceso el ${esc(fmt(p.fecha))}</span></span>
+      <span class="row"><button type="button" class="primary" data-ok="${esc(p.id)}">Aceptar</button><button type="button" class="danger" data-no="${esc(p.id)}">Rechazar</button></span></div>`).join("")
+    : `<div class="small muted">No hay solicitudes pendientes.</div>`;
+  $("people-ok").innerHTML = ok.length ? ok.map(p=>`<div class="trash-item"><span><b>${esc(p.nombre)}</b><br><span class="small muted">${esc(p.email)}</span></span>
+      <button type="button" class="ghost small" data-no="${esc(p.id)}">Quitar acceso</button></div>`).join("") : `<div class="small muted">Todavía no hay profesores aprobados.</div>`;
+}
+$("people").addEventListener("click",async e=>{
+  const b=e.target.closest("[data-ok],[data-no]"); if(!b) return; b.disabled=true;
+  const id=b.dataset.ok||b.dataset.no;
+  try{ await DB.doc("usuarios/"+id).update({estado:b.dataset.ok?"aprobado":"rechazado",revisado:now(),revisadoPor:S.prof}); }
+  catch(_){ b.disabled=false; }
+});
+// Primera carga: copia los aviones y registros de la bitácora anterior (data/seed.json)
+$("seed-btn").addEventListener("click",async()=>{
+  const b=$("seed-btn"); b.disabled=true; msg("seed-msg","Cargando…");
+  try{
+    const seed=await (await fetch("data/seed.json")).json();
+    for(const a of seed.aviones){ const {id,registros,...data}=a; await DB.doc("aviones/"+id).set(data);
+      for(const r of registros||[]){ const {id:rid,...rd}=r; await DB.doc(`aviones/${id}/registros/${rid}`).set(rd); } }
+    msg("seed-msg","Listo.","ok");
+  }catch(_){ msg("seed-msg","No se pudo cargar.","err"); b.disabled=false; }
+});
+
+$("mt-sis").innerHTML = SISTEMAS.map(s=>`<option>${s}</option>`).join("");
+
+/* ---------- Navegación ---------- */
+function route(){
+  const id = (location.hash||"").slice(1);
+  $("view-start").hidden = !!S.role;
+  if(!S.role){ $("view-list").hidden=true; $("view-detail").hidden=true; return; }
+  if(id && id.startsWith("av-")) openDetail(id); else openList();
+}
+window.addEventListener("hashchange",route);
+$("back").addEventListener("click",e=>{e.preventDefault(); location.hash=""; openList();});
+
+function openList(){
+  if(S.logUnsub){ S.logUnsub(); S.logUnsub=null; }
+  S.current=null; S.log=[];
+  $("view-detail").hidden=true; $("view-list").hidden=false;
+  renderFleet();
+}
+function openDetail(id){
+  $("view-list").hidden=true; $("view-detail").hidden=false;
+  if(S.current!==id){
+    S.current=id; S.log=[]; S.qrFor=null; S.builtFor=null;
+    resetEntryForm();
+    ["m-title","m-url","m-ftitle"].forEach(f=>$(f).value="");
+    ["e-msg","m-link-msg","m-file-msg","ed-msg","del-msg"].forEach(m=>msg(m,""));
+    resetDelete(); $("saved-box").hidden=true; S.calDay=null; S.calMonth=null;
+    showSub(S.role==="alumno"?"manuales":"menu");
+    if(S.logUnsub){ S.logUnsub(); S.logUnsub=null; }
+    subscribeLog();
+    window.scrollTo(0,0);
+  }
+  renderDetail();
+}
+
+/* ---------- Lista ---------- */
+$("search").addEventListener("input",renderFleet);
+function sortedPlanes(){ return [...S.planes.values()].sort((a,b)=>(EST[b.estado]?.rank||0)-(EST[a.estado]?.rank||0) || a.matricula.localeCompare(b.matricula)); }
+function renderFleet(){
+  const box=$("fleet");
+  if(!S.db){ box.innerHTML=`<div class="empty">${S.loaded?"No hay conexión con la bitácora compartida.":"Cargando aviones…"}</div>`; return; }
+  if(!S.loaded){ box.innerHTML=`<div class="empty">Cargando aviones…</div>`; return; }
+  const q=$("search").value.trim().toLowerCase();
+  renderTrash();
+  const list=sortedPlanes().filter(p=>!p.eliminado).filter(p=>!q || (p.matricula+" "+(p.modelo||"")).toLowerCase().includes(q));
+  if(![...S.planes.values()].some(p=>!p.eliminado)){ box.innerHTML=`<div class="empty">Todavía no hay aviones cargados.<br>${S.role==="admin"?"Usá <b>Agregar avión</b> para cargar el primero con su matrícula.":"El administrador es quien los agrega."}</div>`; $("add-box").open=true; return; }
+  if(!list.length){ box.innerHTML=`<div class="empty">Ningún avión coincide con “${esc(q)}”.</div>`; return; }
+  box.innerHTML=list.map(p=>{
+    const st=EST[p.estado]?p.estado:"ok", n=p.avisosAbiertos||0;
+    const last=p.ultimo?`${esc(p.ultimo.tipo)} · ${esc(p.ultimo.autor)} · <span class="mono">${esc(fmt(p.ultimo.fecha))}</span>`:"Sin registros todavía";
+    if(S.role==="alumno") return `<a class="plane" href="#${esc(p.id)}">
+      <span class="reg mono">${esc(p.matricula)}</span>
+      <div class="muted">${esc(p.modelo||"Modelo sin cargar")}</div>
+      <div class="small">${(p.manuales||[]).length} documento${(p.manuales||[]).length===1?"":"s"} · Ver manuales</div></a>`;
+    return `<a class="plane s-${st}" href="#${esc(p.id)}">
+      <div class="row" style="justify-content:space-between"><span class="reg mono">${esc(p.matricula)}</span><span class="chip c-${st}">${EST[st].label}</span></div>
+      <div class="muted">${esc(p.modelo||"Modelo sin cargar")}</div>
+      <div class="small">${n?`<b>${n} aviso${n>1?"s":""} activo${n>1?"s":""}</b>`:"Sin avisos activos"}</div>
+      <div class="small muted">${last}</div></a>`;
+  }).join("");
+}
+
+$("add-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  if(!S.db) return msg("add-msg","Sin conexión con la bitácora.","err");
+  const reg=$("add-reg").value.trim().toUpperCase();
+  const id=slug(reg);
+  if(id.length<4) return msg("add-msg","Escribí una matrícula válida.","err");
+  if(S.planes.has(id)) return msg("add-msg",S.planes.get(id).eliminado?"Ese avión está en Eliminados: restauralo desde ahí.":"Ese avión ya está cargado.","err");
+  try{
+    await S.db.doc("aviones/"+id).set({matricula:reg,modelo:$("add-model").value.trim(),notas:$("add-notes").value.trim(),
+      motores:+$("add-eng").value,motorModelo:"",limites:{},limitesFuente:"",
+      estado:"ok",avisosAbiertos:0,manuales:[],creado:now(),ultimo:null});
+    $("add-reg").value=$("add-model").value=$("add-notes").value="";
+    msg("add-msg","Agregado.","ok");
+  }catch(err){ msg("add-msg",writeErr(err),"err"); }
+});
+
+/* ---------- Ficha ---------- */
+function plane(){ return S.planes.get(S.current); }
+function renderDetail(){
+  let p=plane(); if(p&&p.eliminado) p=null;
+  $("d-missing").hidden = !(S.loaded && !p);
+  $("d-main").hidden = !p;
+  if(!p) return;
+  renderMenu(p);
+  $("d-reg").textContent=p.matricula;
+  $("d-model").textContent=[p.modelo||"Modelo sin cargar", p.motorModelo, +p.motores===2?"bimotor":""].filter(Boolean).join(" · ");
+  $("d-notes").textContent=p.notas||"";
+  const st=EST[p.estado]?p.estado:"ok";
+  $("d-status").className="chip c-"+st; $("d-status").textContent=EST[st].label;
+  const sig=p.id+"|"+p.motores+"|"+JSON.stringify(p.limites||{});
+  if(S.builtFor!==sig){ S.builtFor=sig; buildSheets(p); fillEdit(p); }
+  renderManuals(p); renderLog(); renderQR(p);
+}
+
+/* ---------- Planillas ---------- */
+function buildSheets(p){
+  // Conservar lo ya escrito si se reconstruye por un cambio de límites
+  const keep={}; document.querySelectorAll("#pm-table input").forEach(i=>keep[i.id]=i.type==="checkbox"?i.checked:i.value);
+  const E=engines(p);
+  $("pm-table").innerHTML=`<thead><tr><th>Parámetro</th>${E.map(([,l])=>`<th>${l}</th>`).join("")}<th>Límite</th></tr></thead><tbody>`+
+    PM.map(r=>`<tr><td>${r.l}</td>${E.map(([e])=>{
+      const id=`pm-${e}-${r.k}`;
+      if(r.t==="c") return `<td><input type="checkbox" id="${id}" aria-label="${esc(r.l)}"></td>`;
+      if(r.t==="calc") return `<td class="calc" id="${id}">–</td>`;
+      return `<td><input type="text" inputmode="decimal" id="${id}" data-row="${r.k}" aria-label="${esc(r.l)}"></td>`;
+    }).join("")}<td class="lim">${esc(limText(p,r))}</td></tr>`).join("")+`</tbody>`;
+  Object.entries(keep).forEach(([id,v])=>{ const i=$(id); if(i){ if(i.type==="checkbox") i.checked=v; else i.value=v; } });
+  const lv=limText(p,{min:"vacioMin",max:"vacioMax"});
+  $("pm-vac").placeholder = lv?`Límite ${lv}`:"";
+  $("pm-limsrc").textContent = p.limitesFuente ? "Límites cargados de: "+p.limitesFuente : "Este avión no tiene límites cargados. Los carga el administrador en “Datos y límites”.";
+  $("mt-hm-wrap").innerHTML = E.map(([e,l])=>`<label for="mt-hm-${e}">Horas ${l.toLowerCase()}</label><input id="mt-hm-${e}" inputmode="decimal" class="mono">`).join("");
+  $("ref-list").innerHTML = (p.manuales||[]).map(m=>`<option value="${esc((m.grupo?m.grupo+", ":"")+m.titulo)}">`).join("");
+  checkPm();
+}
+function readPm(p){
+  const E=engines(p), motores={}, fuera=[];
+  E.forEach(([e,el])=>{
+    const o={};
+    PM.forEach(r=>{
+      const i=$(`pm-${e}-${r.k}`);
+      if(r.t==="c") o[r.k]=!!i?.checked;
+      else if(r.t==="n") o[r.k]=num(i?.value);
+    });
+    o.dif = isNum(o.caidaL)&&isNum(o.caidaR) ? Math.abs(o.caidaL-o.caidaR) : null;
+    PM.forEach(r=>{ if(r.t!=="c" && outOf(p,r,o[r.k])) fuera.push(`${el}: ${r.l.replace(/ \(.*\)/,"")} ${o[r.k]} (límite ${limText(p,r)})`); });
+    motores[e]=o;
+  });
+  const vac=num($("pm-vac").value);
+  if(outOf(p,{min:"vacioMin",max:"vacioMax"},vac)) fuera.push(`Succión ${vac} inHg (límite ${limText(p,{min:"vacioMin",max:"vacioMax"})})`);
+  return {motores,vac,fuera};
+}
+function checkPm(){
+  const p=plane(); if(!p) return;
+  const {motores,fuera}=readPm(p);
+  engines(p).forEach(([e])=>{
+    PM.forEach(r=>{
+      const el=$(`pm-${e}-${r.k}`); if(!el) return;
+      const bad=outOf(p,r,motores[e][r.k]);
+      if(r.t==="calc"){ el.textContent=isNum(motores[e].dif)?motores[e].dif:"–"; el.classList.toggle("out",bad); }
+      else if(r.t==="n") el.classList.toggle("out",bad);
+    });
+  });
+  $("pm-vac").classList.toggle("out",outOf(p,{min:"vacioMin",max:"vacioMax"},num($("pm-vac").value)));
+  $("pm-out").hidden=!fuera.length;
+  $("pm-out").innerHTML = fuera.length ? `<b>Fuera de límite:</b> ${fuera.map(esc).join(" · ")}<br>Revisá el valor y, si es correcto, dejá el avión como “Hay algo por arreglar” o “No tocar”.` : "";
+}
+$("sheet-pm").addEventListener("input",checkPm);
+$("cb-tipo").addEventListener("change",()=>{ $("cb-otro-wrap").hidden=$("cb-tipo").value!=="Otro"; });
+
+function setKind(k){
+  S.kind=k;
+  $("form-title").textContent = KINDS[k];
+  $("sheet-pm").hidden = k!=="pm"; $("sheet-mant").hidden = k!=="mant"; $("sheet-comb").hidden = k!=="comb";
+  $("state-wrap").hidden = k==="comb";
+  $("e-text-lbl").textContent = (k==="pm"||k==="comb")?"Observaciones":k==="mant"?"Trabajo realizado / acción correctiva *":"Qué se encontró *";
+  $("e-text").placeholder = k==="comb"?"Opcional":k==="pm"?"Cómo anduvo, ruidos, vibraciones, lo que haya que contarle al próximo":k==="mant"?"Qué se hizo, con qué referencia y qué se verificó":"Qué viste y dónde";
+  msg("e-msg","");
+}
+$("kind-pick").addEventListener("click",e=>{ const b=e.target.closest("[data-pick]"); if(!b) return;
+  if(b.dataset.pick!==S.kind) resetEntryForm(); setKind(b.dataset.pick); $("kind-pick").hidden=true; $("entry-form").hidden=false; window.scrollTo(0,0); });
+$("kind-change").addEventListener("click",()=>{ $("entry-form").hidden=true; $("kind-pick").hidden=false; });
+
+function partRow(){
+  const d=document.createElement("div"); d.className="part";
+  d.innerHTML=`<input placeholder="N.º de parte" data-f="np" aria-label="Número de parte"><input placeholder="Descripción" data-f="desc" aria-label="Descripción">
+    <input placeholder="N.º de serie" data-f="ns" aria-label="Número de serie"><input placeholder="Cant." data-f="cant" inputmode="numeric" aria-label="Cantidad">
+    <input placeholder="Certificado (8130-3 o equiv.)" data-f="cert" aria-label="Certificado"><button type="button" class="ghost small" data-rmpart>Quitar</button>`;
+  return d;
+}
+$("mt-addpart").addEventListener("click",()=>$("mt-parts").appendChild(partRow()));
+$("mt-parts").addEventListener("click",e=>{ if(e.target.closest("[data-rmpart]")) e.target.closest(".part").remove(); });
+
+function resetEntryForm(){
+  $("entry-form").querySelectorAll("input:not([type=checkbox]),textarea").forEach(i=>{ if(i.id!=="who-name") i.value=""; });
+  $("entry-form").querySelectorAll("input[type=checkbox]").forEach(i=>i.checked=false);
+  $("e-state").value="ok"; $("mt-parts").innerHTML=""; $("pm-out").hidden=true;
+  document.querySelectorAll("#entry-form input.out").forEach(i=>i.classList.remove("out"));
+  setKind(S.kind||"pm");
+  if(plane()) checkPm();
+}
+
+$("entry-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  if(!needName("e-msg")) return;
+  const p=plane(); if(!p) return;
+  const k=S.kind, texto=$("e-text").value.trim(), estado=$("e-state").value;
+  if(k==="pm" && !texto && estado!=="ok" && !readPm(p).fuera.length) return msg("e-msg","Contá qué hay que arreglar o por qué no se puede tocar.","err");
+  if(k==="comb" && !(num($("cb-lt").value)>0)) return msg("e-msg","Cargá los litros.","err");
+  if((k==="mant"||k==="obs") && !texto) return msg("e-msg", k==="mant"?"Contá qué trabajo se hizo.":"Contá qué se encontró.","err");
+  let datos={}, tipo=KINDS[k], horas="";
+  if(k==="pm"){
+    const r=readPm(p);
+    datos={motivo:$("pm-motivo").value,trabajo:$("pm-trabajo").value.trim(),supervisa:$("pm-sup").value.trim(),
+      horaInicio:$("pm-hi").value,horaFin:$("pm-hf").value,oat:num($("pm-oat").value),
+      horometroInicio:num($("pm-hob1").value),horometroFin:num($("pm-hob2").value),combustible:$("pm-fuel").value.trim(),
+      seguridad:Object.fromEntries(SAFETY.map(([s])=>[s,$("pm-c-"+s).checked])),sinFugas:$("pm-c-fugas").checked,
+      motores:r.motores,vacio:r.vac,fuera:r.fuera};
+    horas = isNum(datos.horometroFin)?String(datos.horometroFin):"";
+    if(r.fuera.length && estado==="ok"){
+      if($("e-msg").dataset.warned!=="1"){ $("e-msg").dataset.warned="1"; return msg("e-msg","Hay valores fuera de límite y el avión quedó como “Todo en orden”. Si es correcto, tocá Guardar de nuevo.","err"); }
+    }
+  } else if(k==="mant"){
+    const parts=[...$("mt-parts").querySelectorAll(".part")].map(row=>Object.fromEntries([...row.querySelectorAll("input")].map(i=>[i.dataset.f,i.value.trim()]))).filter(x=>Object.values(x).some(Boolean));
+    datos={tipoTrabajo:$("mt-tipo").value,sistema:$("mt-sis").value,referencia:$("mt-ref").value.trim(),motivo:$("mt-motivo").value.trim(),
+      horasCelula:num($("mt-hc").value),horasMotor:Object.fromEntries(engines(p).map(([e])=>[e,num($("mt-hm-"+e)?.value)])),
+      verifico:$("mt-ver").value.trim(),pruebaFuncional:$("mt-prueba").checked,pendientes:$("mt-pend").value.trim(),repuestos:parts};
+    tipo=datos.tipoTrabajo;
+    horas = isNum(datos.horasCelula)?String(datos.horasCelula):"";
+  } else if(k==="comb"){
+    const t=$("cb-tipo").value;
+    datos={combustible:t==="Otro"?($("cb-otro").value.trim()||"Otro"):t,litros:num($("cb-lt").value),tanqueIzq:num($("cb-izq").value),tanqueDer:num($("cb-der").value),
+      aTope:$("cb-tope").checked,horometro:num($("cb-hob").value),origen:$("cb-orig").value,lote:$("cb-lote").value.trim(),
+      verifico:$("cb-ver").value.trim(),costo:$("cb-costo").value.trim(),muestra:$("cb-muestra").value.trim(),
+      controles:Object.fromEntries(CB_CHECKS.map(([c])=>[c,$("cb-c-"+c).checked]))};
+    horas = isNum(datos.horometro)?String(datos.horometro):"";
+  }
+  // La carga de combustible es solo un registro: nunca cambia el estado del avión
+  const estadoFinal = k==="comb" ? "ok" : estado;
+  $("e-msg").dataset.warned="";
+  const btn=e.submitter||e.target.querySelector("button[type=submit]"); btn.disabled=true;
+  const id=S.current;
+  try{
+    const rec={fecha:now(),clase:k,tipo,estado:estadoFinal,abierto:estadoFinal!=="ok",
+      texto:texto||(datos.fuera?.length?"Valores fuera de límite en la puesta en marcha.":(k==="pm"?"Puesta en marcha sin observaciones.":k==="comb"?`${datos.litros} L de ${datos.combustible}.`:"")),horas,datos,autor:myName(),autorId:S.uid,seguimiento:[]};
+    await S.db.collection(`aviones/${id}/registros`).add(rec);
+    resetEntryForm();
+    msg("e-msg","");
+    S.lastSaved={r:rec,p};
+    $("saved-txt").textContent=`Registro guardado a nombre de ${rec.autor}.`;
+    msg("saved-msg",""); $("saved-box").hidden=false; $("entry-form").hidden=true;
+    $("saved-box").scrollIntoView({block:"nearest"});
+    await refreshSummary(id);
+  }catch(err){ msg("e-msg",writeErr(err),"err"); }
+  btn.disabled=false;
+});
+
+/* ---------- Bitácora ---------- */
+function subscribeLog(){
+  if(!S.db || !S.current || !S.canWrite) return;
+  const id=S.current;
+  S.logUnsub=S.db.collection(`aviones/${id}/registros`).orderBy("fecha","desc").limit(300).onSnapshot(snap=>{
+    if(S.current!==id) return;
+    S.log=snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderLog();
+  },err=>{ $("d-log").innerHTML=`<div class="empty">No se pudo leer el historial.</div>`; });
+}
+function stLabel(r){ return r.abierto?EST[r.estado].label:(r.estado==="ok"&&r.seguimiento?.length?"Resuelto":EST[r.estado]?.label||"Operativo"); }
+function renderLog(){
+  const p=plane();
+  const open=S.log.filter(r=>r.abierto&&EST[r.estado]).sort((a,b)=>EST[b.estado].rank-EST[a.estado].rank);
+  const al=$("d-alerts");
+  const typing={}; al.querySelectorAll("input[data-note]").forEach(i=>typing[i.dataset.note]=i.value);
+  al.innerHTML = open.length ? open.map(r=>{
+    const acts = r.estado==="pendiente" ? [["reparando","Empezar arreglo"],["ok","Marcar resuelto"]]
+               : r.estado==="reparando" ? [["ok","Marcar resuelto"]]
+               : [["ok","Liberar: ya se puede usar"]];
+    const fuera=r.datos?.fuera?.length?`<div class="small"><b>Fuera de límite:</b> ${r.datos.fuera.map(esc).join(" · ")}</div>`:"";
+    return `<div class="alert a-${r.estado}">
+      <div class="row" style="justify-content:space-between"><span class="chip c-${r.estado}">${EST[r.estado].label}</span><span class="small muted mono">${esc(fmt(r.fecha))}</span></div>
+      <p>${esc(r.texto)}</p>${fuera}
+      <div class="small muted">${esc(r.tipo)} · cargado por ${esc(r.autor)}</div>
+      ${trail(r)}
+      <div class="row"><input data-note="${esc(r.id)}" placeholder="Comentario (opcional)" style="flex:1 1 200px" value="${esc(typing[r.id]||"")}">
+        ${acts.map(([to,l])=>`<button type="button" data-act="${esc(r.id)}" data-to="${to}">${l}</button>`).join("")}</div>
+      <span class="msg" id="am-${esc(r.id)}"></span>
+    </div>`;
+  }).join("") : `<div class="muted">No hay nada pendiente, en reparación ni bloqueado.</div>`;
+
+  renderCal();
+  const shown = S.calDay ? S.log.filter(r=>dayKey(r.fecha)===S.calDay) : S.log;
+  $("log-filter").innerHTML = S.calDay ? `Solo el ${esc(S.calDay.split("-").reverse().join("/"))} · <a href="#" id="log-all">Ver todos</a>` : "";
+  $("d-log").innerHTML = shown.length ? shown.map(r=>`<div class="entry">
+      <div class="when">${esc(fmt(r.fecha))}</div>
+      <div class="body">
+        <div class="row"><b>${esc(r.tipo)}</b>${r.clase==="comb"?"":`<span class="chip c-${EST[r.estado]?r.estado:"ok"}">${stLabel(r)}</span>`}${r.horas?`<span class="small muted mono">${esc(r.horas)} h</span>`:""}</div>
+        <p>${esc(r.texto)}</p>
+        ${details(r,p)}
+        <div class="small muted">${esc(r.autor)}${r.datos?.supervisa?` · supervisó ${esc(r.datos.supervisa)}`:""}${r.datos?.verifico?` · verificó ${esc(r.datos.verifico)}`:""}</div>
+        ${trail(r)}
+        <div class="prof-only"><button type="button" class="ghost small" data-pdf="${esc(r.id)}">Descargar PDF</button> <span class="msg" id="pdfm-${esc(r.id)}"></span></div>
+      </div></div>`).join("")
+    : `<div class="muted">Sin registros. El primero que haga una puesta en marcha o un mantenimiento lo carga arriba.</div>`;
+}
+function details(r,p){
+  const d=r.datos||{};
+  if(r.clase==="pm"){
+    const kv=[["Motivo",d.motivo+(d.trabajo?` (${d.trabajo})`:"")],["Horario",[d.horaInicio,d.horaFin].filter(Boolean).join("–")],
+      ["Horómetro",[d.horometroInicio,d.horometroFin].filter(isNum).join(" → ")],["OAT",isNum(d.oat)?d.oat+" °C":""],["Combustible",d.combustible],["Succión",isNum(d.vacio)?d.vacio+" inHg":""]]
+      .filter(([,v])=>v);
+    const E=Object.keys(d.motores||{}); const names={izq:"Izq.",der:"Der.",m:"Motor"};
+    const rows=PM.filter(row=>row.t!=="c" && E.some(e=>isNum(d.motores[e][row.k])));
+    const tbl=rows.length?`<div class="tblwrap"><table class="mini"><tr><th></th>${E.map(e=>`<th>${names[e]||e}</th>`).join("")}</tr>${rows.map(row=>`<tr><th>${esc(row.l)}</th>${E.map(e=>{const v=d.motores[e][row.k];return `<td class="${outOf(p,row,v)?"out":""}">${isNum(v)?v:"–"}</td>`}).join("")}</tr>`).join("")}</table></div>`:"";
+    const faltan=[...SAFETY.filter(([s])=>d.seguridad&&!d.seguridad[s]).map(([,l])=>l),...(d.sinFugas===false?["Sin fugas"]:[])];
+    const chk=E.filter(e=>PM.some(row=>row.t==="n"&&isNum(d.motores[e][row.k]))).flatMap(e=>PM.filter(row=>row.t==="c"&&d.motores[e][row.k]===false).map(row=>`${names[e]||e}: ${row.l}`));
+    return `<div class="kv">${kv.map(([k,v])=>`<span><b>${k}:</b> ${esc(v)}</span>`).join("")}</div>${tbl}
+      ${d.fuera?.length?`<div class="small" style="color:var(--stop)"><b>Fuera de límite:</b> ${d.fuera.map(esc).join(" · ")}</div>`:""}
+      ${faltan.length||chk.length?`<div class="small muted">Sin tildar: ${esc([...faltan,...chk].join(", "))}</div>`:""}`;
+  }
+  if(r.clase==="mant"){
+    const hm=Object.entries(d.horasMotor||{}).filter(([,v])=>isNum(v)).map(([e,v])=>`${({izq:"izq.",der:"der.",m:""})[e]||e} ${v}`).join(", ");
+    const kv=[["Sistema",d.sistema],["Referencia",d.referencia],["Motivo",d.motivo],["Horas motor",hm],["Prueba funcional",d.pruebaFuncional?"Sí":""],["Pendientes",d.pendientes]].filter(([,v])=>v);
+    const parts=(d.repuestos||[]).map(x=>[x.cant&&x.cant+"×",x.np,x.desc,x.ns&&"S/N "+x.ns,x.cert&&"cert. "+x.cert].filter(Boolean).join(" "));
+    return `<div class="kv">${kv.map(([k,v])=>`<span><b>${k}:</b> ${esc(v)}</span>`).join("")}</div>
+      ${parts.length?`<div class="small"><b>Repuestos:</b> ${parts.map(esc).join(" · ")}</div>`:""}`;
+  }
+  if(r.clase==="comb"){
+    const tanks=[isNum(d.tanqueIzq)&&`izq. ${d.tanqueIzq} L`,isNum(d.tanqueDer)&&`der. ${d.tanqueDer} L`].filter(Boolean).join(", ");
+    const cons=consumo(r);
+    const kv=[["Combustible",d.combustible],["Litros",isNum(d.litros)?d.litros+" L":""],["Tanques",tanks],["A tope",d.aTope?"Sí":""],["Origen",[d.origen,d.lote].filter(Boolean).join(" · ")],
+      ["Muestra",d.muestra],["Verificó",d.verifico],["Costo",d.costo],["Consumo",cons?cons+" L/h desde la carga a tope anterior":""]].filter(([,v])=>v);
+    const falt=CB_CHECKS.filter(([c])=>d.controles&&!d.controles[c]).map(([,l])=>l);
+    return `<div class="kv">${kv.map(([k,v])=>`<span><b>${k}:</b> ${esc(v)}</span>`).join("")}</div>${falt.length?`<div class="small muted">Sin tildar: ${esc(falt.join(", "))}</div>`:""}`;
+  }
+  return "";
+}
+// Consumo L/h: litros cargados desde la carga a tope anterior / horas de horómetro entre ambas
+function consumo(r){
+  const d=r.datos||{}; if(!d.aTope||!isNum(d.horometro)) return null;
+  const combs=S.log.filter(x=>x.clase==="comb").sort((a,b)=>a.fecha<b.fecha?-1:1);
+  const i=combs.findIndex(x=>x.id===r.id); if(i<1) return null;
+  let lt=0;
+  for(let j=i;j>=1;j--){ lt+=combs[j].datos?.litros||0; const prev=combs[j-1].datos||{};
+    if(prev.aTope && isNum(prev.horometro)){ const h=d.horometro-prev.horometro; return h>0?Math.round(lt/h*10)/10:null; } }
+  return null;
+}
+function trail(r){
+  if(!r.seguimiento||!r.seguimiento.length) return "";
+  return `<div class="trail">${r.seguimiento.map(s=>`<span>↳ <span class="mono">${esc(fmt(s.fecha))}</span> · ${esc(s.autor)}: ${esc(s.accion)}${s.nota?` · ${esc(s.nota)}`:""}</span>`).join("")}</div>`;
+}
+
+$("d-alerts").addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-act]"); if(!b) return;
+  const id=b.dataset.act, to=b.dataset.to, mid="am-"+id;
+  if(!needName(mid)) return;
+  const r=S.log.find(x=>x.id===id); if(!r) return;
+  const note=(document.querySelector(`input[data-note="${CSS.escape(id)}"]`)?.value||"").trim();
+  const accion = to==="reparando"?"empezó el arreglo":(r.estado==="no_tocar"?"liberó el avión":"marcó resuelto");
+  b.disabled=true;
+  try{
+    await S.db.doc(`aviones/${S.current}/registros/${id}`).update({
+      estado:to, abierto:to!=="ok",
+      seguimiento:[...(r.seguimiento||[]),{fecha:now(),autor:myName(),autorId:S.uid,accion,nota:note}]
+    });
+    await refreshSummary(S.current);
+  }catch(err){ msg(mid,writeErr(err),"err"); b.disabled=false; }
+});
+
+// Recalcula el estado general del avión a partir de sus avisos abiertos
+async function refreshSummary(id){
+  const col=S.db.collection(`aviones/${id}/registros`);
+  const [open,last]=await Promise.all([col.where("abierto","==",true).get(), col.orderBy("fecha","desc").limit(1).get()]);
+  let estado="ok";
+  open.docs.forEach(d=>{ const s=d.data().estado; if(EST[s] && EST[s].rank>EST[estado].rank) estado=s; });
+  const l=last.docs[0]?.data();
+  await S.db.doc("aviones/"+id).update({estado,avisosAbiertos:open.size,ultimo:l?{fecha:l.fecha,tipo:l.tipo,autor:l.autor}:null});
+}
+
+/* ---------- Manuales ---------- */
+function renderManuals(p){
+  const m=(p.manuales||[]).map((x,i)=>({...x,i}));
+  if(!m.length){ $("d-manuals").innerHTML=`<div class="muted">Sin manuales cargados. Agregá el enlace al manual o subí el PDF.</div>`; return; }
+  const groups=[]; m.forEach(x=>{ const g=x.grupo||"Otros documentos"; let G=groups.find(y=>y.g===g); if(!G){G={g,items:[]};groups.push(G);} G.items.push(x); });
+  $("d-manuals").innerHTML = groups.map(G=>`<div class="mgroup"><h3>${esc(G.g)}</h3>${G.items.map(x=>{
+    const href = x.tipo==="archivo" ? (x.ruta||"") : x.url;
+    return `<div class="manual"><a href="${esc(href)}" target="_blank" rel="noopener">${esc(x.titulo)}</a>
+      <span class="row"><span class="small muted mono">${esc(x.paginas||(x.tipo==="archivo"?"PDF":"Enlace"))}</span>
+      ${S.canWrite?`<button type="button" class="ghost small" data-rm="${x.i}">Quitar</button>`:""}</span></div>`;
+  }).join("")}</div>`).join("");
+}
+$("d-manuals").addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-rm]"); if(!b) return;
+  if(b.dataset.armed!=="1"){ b.dataset.armed="1"; b.textContent="¿Seguro? Quitar"; b.classList.add("danger"); return; }
+  const p=plane(); const i=+b.dataset.rm; const m=[...(p.manuales||[])]; const [gone]=m.splice(i,1);
+  b.disabled=true;
+  try{
+    await S.db.doc("aviones/"+p.id).update({manuales:m});
+    if(gone && gone.tipo==="archivo" && S.assets){ try{ await S.assets.delete(gone.assetId); }catch(_){} }
+  }catch(err){ b.disabled=false; b.textContent=writeErr(err); }
+});
+$("m-link-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const url=$("m-url").value.trim();
+  if(!/^https?:\/\//i.test(url)) return msg("m-link-msg","El enlace tiene que empezar con https://","err");
+  const p=plane();
+  try{
+    await S.db.doc("aviones/"+p.id).update({manuales:[...(p.manuales||[]),{titulo:$("m-title").value.trim(),tipo:"enlace",url}]});
+    $("m-title").value=$("m-url").value=""; msg("m-link-msg","Manual agregado.","ok");
+  }catch(err){ msg("m-link-msg",writeErr(err),"err"); }
+});
+$("m-file-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const f=$("m-file").files[0]; if(!f) return;
+  const types={pdf:"application/pdf",png:"image/png",jpg:"image/jpeg",jpeg:"image/jpeg",webp:"image/webp"};
+  const type=types[(f.name.split(".").pop()||"").toLowerCase()]||f.type;
+  const btn=e.submitter||e.target.querySelector("button"); btn.disabled=true;
+  msg("m-file-msg","Subiendo…");
+  try{
+    const up=await S.assets.upload(f,{type});
+    const p=plane();
+    await S.db.doc("aviones/"+p.id).update({manuales:[...(p.manuales||[]),{titulo:$("m-ftitle").value.trim(),tipo:"archivo",assetId:up.id}]});
+    $("m-ftitle").value=""; $("m-file").value=""; msg("m-file-msg","Manual subido.","ok");
+  }catch(err){
+    const c=err&&err.code;
+    msg("m-file-msg", c==="too_large"?"El archivo pasa los 20 MB. Dividilo en partes o subilo a Drive y agregalo por enlace.":
+      c==="unsupported_type"?"Solo se aceptan PDF o imágenes.":
+      c==="quota_or_state"?"Se llenó el espacio de archivos.":"No se pudo subir el archivo.","err");
+  }
+  btn.disabled=false;
+});
+
+/* ---------- QR ---------- */
+function renderQR(p){
+  const box=$("d-qr");
+  if(S.qrFor===p.id+"|"+p.modelo) return;
+  S.qrFor=p.id+"|"+p.modelo;
+  if(!APP_URL || typeof QRCode==="undefined"){
+    box.innerHTML=`<div class="muted">No se pudo generar el código QR en este momento.</div>`; return;
+  }
+  const link=APP_URL+"#"+p.id;
+  const scratch=$("qr-scratch"); scratch.innerHTML="";
+  new QRCode(scratch,{text:link,width:480,height:480,correctLevel:QRCode.CorrectLevel.M});
+  const qc=scratch.querySelector("canvas");
+  // Etiqueta imprimible: QR + matrícula + modelo
+  const W=600,H=760,c=document.createElement("canvas"); c.width=W; c.height=H;
+  const g=c.getContext("2d");
+  g.fillStyle="#fff"; g.fillRect(0,0,W,H);
+  g.drawImage(qc,60,40,480,480);
+  g.fillStyle="#16202a"; g.textAlign="center";
+  g.font="700 72px 'Barlow Condensed', Arial Narrow, Arial, sans-serif"; g.fillText(p.matricula,W/2,610);
+  g.font="500 30px Barlow, Arial, sans-serif"; g.fillText(p.modelo||"",W/2,655);
+  g.font="500 24px Barlow, Arial, sans-serif"; g.fillStyle="#5a6775"; g.fillText("Escaneá para ver manuales y bitácora",W/2,715);
+  S.qrCanvas=c;
+  box.innerHTML=`<img alt="Código QR de ${esc(p.matricula)}" src="${c.toDataURL("image/png")}">
+    <div class="qrside">
+      <div class="small">Imprimí esta etiqueta y pegala en el avión. Al escanearla se abre directo esta ficha.</div>
+      <div class="linkbox" id="qr-link">${esc(link)}</div>
+      <div class="row">
+        <button type="button" id="qr-dl" ${S.downloads?"":"hidden"}>Descargar etiqueta (PNG)</button>
+        <button type="button" id="qr-copy" class="ghost">Copiar enlace</button>
+      </div>
+      <span class="msg" id="qr-msg"></span>
+    </div>`;
+}
+$("d-qr").addEventListener("click",async e=>{
+  if(e.target.id==="qr-copy"){
+    try{ await navigator.clipboard.writeText($("qr-link").textContent); msg("qr-msg","Enlace copiado.","ok"); }
+    catch(_){ const r=document.createRange(); r.selectNodeContents($("qr-link")); const s=getSelection(); s.removeAllRanges(); s.addRange(r); msg("qr-msg","Seleccioné el enlace: copialo con Ctrl+C."); }
+  }
+  if(e.target.id==="qr-dl" && S.qrCanvas && S.downloads){
+    const p=plane();
+    S.qrCanvas.toBlob(async blob=>{
+      try{ await S.downloads.save({filename:`QR-${p.matricula}.png`,data:blob}); msg("qr-msg","Etiqueta descargada.","ok"); }
+      catch(err){ if(err&&err.code!=="declined") msg("qr-msg","No se pudo descargar. Podés hacer captura de la imagen.","err"); }
+    },"image/png");
+  }
+});
+
+/* ---------- Editar / borrar ---------- */
+$("ed-lims").innerHTML = LIMS.map(([k,l])=>`<div class="field"><label for="lim-${k}">${l}</label><input id="lim-${k}" inputmode="decimal" class="mono"></div>`).join("");
+function fillEdit(p){
+  if($("edit-box").contains(document.activeElement)) return;
+  $("ed-model").value=p.modelo||""; $("ed-notes").value=p.notas||""; $("ed-motor").value=p.motorModelo||"";
+  $("ed-eng").value=String(+p.motores===2?2:1); $("ed-limsrc").value=p.limitesFuente||"";
+  LIMS.forEach(([k])=>$("lim-"+k).value=isNum(p.limites?.[k])?p.limites[k]:"");
+}
+$("edit-form").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const limites={}; LIMS.forEach(([k])=>{ const v=num($("lim-"+k).value); if(v!==null) limites[k]=v; });
+  try{
+    await S.db.doc("aviones/"+S.current).update({modelo:$("ed-model").value.trim(),notas:$("ed-notes").value.trim(),motorModelo:$("ed-motor").value.trim(),
+      motores:+$("ed-eng").value,limites,limitesFuente:$("ed-limsrc").value.trim()});
+    msg("ed-msg","Guardado.","ok");
+  }catch(err){ msg("ed-msg",writeErr(err),"err"); }
+});
+function resetDelete(){ const b=$("del-btn"); b.dataset.armed=""; b.textContent="Eliminar avión"; b.disabled=false; }
+$("del-btn").addEventListener("click",async()=>{
+  const b=$("del-btn");
+  if(b.dataset.armed!=="1"){ b.dataset.armed="1"; b.textContent="Sí, eliminar avión"; msg("del-msg","Va a Eliminados con todo su historial. Se puede restaurar durante 30 días.","err"); return; }
+  b.disabled=true; const id=S.current;
+  try{
+    await S.db.doc("aviones/"+id).update({eliminado:now(),eliminadoPor:myName()});
+    location.hash=""; openList();
+  }catch(err){ msg("del-msg",writeErr(err),"err"); b.disabled=false; }
+});
+
+/* ---------- PDF para imprimir ---------- */
+const pdfTxt = v => String(v ?? "").replace(/[–—]/g,"-").replace(/→/g,"->").replace(/[“”]/g,'"').replace(/[‘’]/g,"'").replace(/…/g,"...").replace(/↳/g,"");
+const yn = v => v===true?"Sí":v===false?"No":"-";
+const nv = v => isNum(v)?String(v):"-";
+function buildPdf(r,p){
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:"mm",format:"a4"});
+  const W=doc.internal.pageSize.getWidth(), M=14; let y=16;
+  const ink=[22,32,42], mut=[90,103,117], red=[194,38,38];
+  const title = r.clase==="comb"?"Carga de combustible":r.clase==="pm"?"Planilla de puesta en marcha":r.clase==="mant"?"Planilla de mantenimiento":"Observación";
+  doc.setFont("helvetica","normal"); doc.setFontSize(9); doc.setTextColor(...mut); doc.text("BITÁCORA DEL HANGAR · REGISTRO TÉCNICO",M,y);
+  doc.setFont("helvetica","bold"); doc.setFontSize(18); doc.setTextColor(...ink); doc.text(title,M,y+8);
+  doc.setFontSize(22); doc.text(pdfTxt(p.matricula),W-M,y+8,{align:"right"}); y+=14;
+  const fecha=new Date(r.fecha);
+  const base={theme:"grid",styles:{font:"helvetica",fontSize:8.5,cellPadding:0.9,textColor:ink,lineColor:[200,206,212]},headStyles:{fillColor:[236,239,243],textColor:ink,fontStyle:"bold"},margin:{left:M,right:M}};
+  const kv=(rows,head)=>{ doc.autoTable({...base,startY:y,head:head?[[{content:head,colSpan:4}]]:undefined,
+      body:rows.reduce((a,c,i)=>{ if(i%2===0) a.push([]); a[a.length-1].push({content:pdfTxt(c[0]),styles:{fontStyle:"bold",textColor:mut}},pdfTxt(c[1]||"-")); return a; },[]),
+      columnStyles:{0:{cellWidth:34},2:{cellWidth:34}}}); y=doc.lastAutoTable.finalY+3.5; };
+  kv([["Avión",[p.modelo,p.matricula].filter(Boolean).join(" ")],["Motor",[p.motorModelo,+p.motores===2?"(2)":""].filter(Boolean).join(" ")],
+      ["Fecha",fecha.toLocaleDateString("es-AR")],["Hora de carga",fecha.toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"})],
+      ["Profesor",r.autor],["Estado final",r.clase==="comb"?"No cambia (solo registro)":(r.abierto?EST[r.estado]?.label:(r.seguimiento?.length?"Resuelto":EST[r.estado]?.label))||"-"]]);
+  const d=r.datos||{};
+  if(r.clase==="pm"){
+    kv([["Motivo",d.motivo],["Trabajo relacionado",d.trabajo],["Supervisó",d.supervisa],["Arranque / corte",[d.horaInicio,d.horaFin].filter(Boolean).join(" / ")],
+        ["Horómetro inicio",nv(d.horometroInicio)],["Horómetro final",nv(d.horometroFin)],["Temp. exterior",isNum(d.oat)?d.oat+" °C":"-"],["Combustible",d.combustible]],"Datos de la prueba");
+    kv([...SAFETY.map(([k,l])=>[l,yn(d.seguridad?.[k])]),["Sin fugas tras el corte",yn(d.sinFugas)]],"Seguridad");
+    const E=Object.keys(d.motores||{}); const names={izq:"Motor izq.",der:"Motor der.",m:"Motor"};
+    doc.autoTable({...base,startY:y,head:[["Parámetro",...E.map(e=>names[e]||e),"Límite"]],
+      body:[...PM.map(row=>[pdfTxt(row.l),...E.map(e=>{const v=d.motores[e][row.k]; return row.t==="c"?yn(v):nv(v);}),pdfTxt(limText(p,row))]),
+            ["Succión / vacío (inHg)",{content:nv(d.vacio),colSpan:E.length},pdfTxt(limText(p,{min:"vacioMin",max:"vacioMax"}))]],
+      didParseCell:c=>{ if(c.section!=="body"||c.column.index<1||c.column.index>E.length||c.row.index>=PM.length) return;
+        const row=PM[c.row.index]; const v=d.motores[E[c.column.index-1]]?.[row.k]; if(row.t!=="c"&&outOf(p,row,v)){ c.cell.styles.textColor=red; c.cell.styles.fontStyle="bold"; } }});
+    y=doc.lastAutoTable.finalY+3.5;
+    if(d.fuera?.length){ doc.autoTable({...base,startY:y,head:[["Fuera de límite"]],headStyles:{fillColor:[251,227,227],textColor:red,fontStyle:"bold"},body:d.fuera.map(f=>[pdfTxt(f)])}); y=doc.lastAutoTable.finalY+3.5; }
+  }
+  if(r.clase==="mant"){
+    const hm=Object.entries(d.horasMotor||{}).filter(([,v])=>isNum(v)).map(([e,v])=>`${({izq:"izq.",der:"der.",m:""})[e]||e} ${v}`).join(", ");
+    kv([["Tipo de trabajo",d.tipoTrabajo],["Sistema",d.sistema],["Referencia técnica",d.referencia],["Horas de célula",nv(d.horasCelula)],
+        ["Horas de motor",hm],["Prueba funcional",d.pruebaFuncional?"Sí":"No"],["Verificó",d.verifico],["Pendientes",d.pendientes]],"Trabajo");
+    if(d.motivo){ doc.autoTable({...base,startY:y,head:[["Motivo o discrepancia encontrada"]],body:[[pdfTxt(d.motivo)]]}); y=doc.lastAutoTable.finalY+3.5; }
+    if(d.repuestos?.length){ doc.autoTable({...base,startY:y,head:[["N.º de parte","Descripción","N.º de serie","Cant.","Certificado"]],
+      body:d.repuestos.map(x=>[x.np,x.desc,x.ns,x.cant,x.cert].map(v=>pdfTxt(v||"-")))}); y=doc.lastAutoTable.finalY+3.5; }
+  }
+  if(r.clase==="comb"){
+    kv([["Combustible",d.combustible],["Litros cargados",nv(d.litros)],["Tanque izq. (L)",nv(d.tanqueIzq)],["Tanque der. (L)",nv(d.tanqueDer)],
+        ["A tope",d.aTope?"Sí":"No"],["Horómetro",nv(d.horometro)],["Origen",d.origen],["Lote o remito",d.lote],["Muestra de drenaje",d.muestra],["Verificó",d.verifico],["Costo",d.costo],["",""]],"Carga");
+    kv(CB_CHECKS.map(([c,l])=>[l,yn(d.controles?.[c])]),"Controles");
+  }
+  const textHead = (r.clase==="pm"||r.clase==="comb")?"Observaciones":r.clase==="mant"?"Trabajo realizado / acción correctiva":"Qué se encontró";
+  doc.autoTable({...base,startY:y,head:[[textHead]],body:[[pdfTxt(r.texto||"-")]],bodyStyles:{minCellHeight:12}}); y=doc.lastAutoTable.finalY+3.5;
+  if(r.seguimiento?.length){ doc.autoTable({...base,startY:y,head:[["Seguimiento"]],body:r.seguimiento.map(s=>[pdfTxt(`${fmt(s.fecha)} · ${s.autor}: ${s.accion}${s.nota?" - "+s.nota:""}`)])}); y=doc.lastAutoTable.finalY+3.5; }
+  // Firmas
+  const sig=[["Profesor",r.autor]]; if(d.supervisa) sig.push(["Supervisó",d.supervisa]); if(d.verifico) sig.push(["Verificó",d.verifico]);
+  if(y>262){ doc.addPage(); y=20; }
+  y+=12; const colW=(W-2*M)/sig.length;
+  sig.forEach(([rol,n],i)=>{ const x=M+i*colW; doc.setDrawColor(...ink); doc.line(x+2,y,x+colW-6,y);
+    doc.setFont("helvetica","normal"); doc.setFontSize(8.5); doc.setTextColor(...mut); doc.text(`Firma ${rol.toLowerCase()}`,x+2,y+4);
+    doc.setTextColor(...ink); doc.text(`Aclaración: ${pdfTxt(n)}`,x+2,y+8.5); });
+  const n=doc.getNumberOfPages();
+  for(let i=1;i<=n;i++){ doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(...mut);
+    doc.text("Registro interno del taller. No reemplaza el historial oficial del avión ni el formulario DA 337.",M,290);
+    doc.text(`Hoja ${i} de ${n}`,W-M,290,{align:"right"}); }
+  return doc.output("blob");
+}
+async function downloadPdf(r,p,msgId){
+  if(!window.jspdf?.jsPDF) return msg(msgId,"No se pudo preparar el PDF. Recargá la página.","err");
+  if(!S.downloads) return msg(msgId,"No se pudo descargar el archivo.","err");
+  try{
+    const blob=buildPdf(r,p); const f=new Date(r.fecha);
+    const stamp=`${f.getFullYear()}-${String(f.getMonth()+1).padStart(2,"0")}-${String(f.getDate()).padStart(2,"0")}_${String(f.getHours()).padStart(2,"0")}${String(f.getMinutes()).padStart(2,"0")}`;
+    const kind=r.clase==="comb"?"combustible":r.clase==="pm"?"puesta-en-marcha":r.clase==="mant"?"mantenimiento":"observacion";
+    await S.downloads.save({filename:`${p.matricula}_${kind}_${stamp}.pdf`,data:blob});
+    msg(msgId,"PDF descargado.","ok");
+  }catch(err){ if(!(err&&err.code==="declined")) msg(msgId,"No se pudo descargar el PDF.","err"); }
+}
+$("saved-pdf").addEventListener("click",()=>{ if(S.lastSaved) downloadPdf(S.lastSaved.r,S.lastSaved.p,"saved-msg"); });
+$("saved-close").addEventListener("click",()=>{ $("saved-box").hidden=true; $("kind-pick").hidden=false; });
+$("d-log").addEventListener("click",e=>{ const b=e.target.closest("button[data-pdf]"); if(!b) return; const r=S.log.find(x=>x.id===b.dataset.pdf); if(r) downloadPdf(r,plane(),"pdfm-"+r.id); });
+
+/* ---------- Menú del avión ---------- */
+function showSub(sub){
+  S.sub=sub;
+  document.querySelectorAll("[data-sub]").forEach(el=>el.hidden=el.dataset.sub!==sub);
+  $("d-menu").hidden = sub!=="menu";
+  $("sub-back").hidden = sub==="menu" || S.role==="alumno";
+  if(sub==="registro"){
+    if($("saved-box").hidden){ $("kind-pick").hidden=false; $("entry-form").hidden=true; }
+    $("kind-pick").querySelector(".menu").hidden=!S.canWrite; $("no-write").hidden=S.canWrite;
+  }
+  window.scrollTo(0,0);
+}
+function renderMenu(p){
+  const n=p.avisosAbiertos||0, docs=(p.manuales||[]).length;
+  const T = {
+    registro:["Nuevo registro","Puesta en marcha, mantenimiento u observación"],
+    historial:["Historial", n?`${n} aviso${n>1?"s":""} activo${n>1?"s":""}`:"Registros y calendario", n?"t-warn":""],
+    manuales:["Manuales",`${docs} documento${docs===1?"":"s"}`],
+    qr:["Código QR","Etiqueta para imprimir y pegar en el avión"],
+    editar:["Datos y límites","Modelo, motores, límites y eliminar avión"]
+  };
+  const keys = S.role==="admin" ? ["editar","manuales","qr"] : ["registro","historial","manuales","qr"];
+  $("d-menu").innerHTML = keys.map(k=>`<button type="button" class="tile ${T[k][2]||""}" data-go="${k}"><b>${T[k][0]}</b><span>${esc(T[k][1])}</span></button>`).join("");
+}
+$("d-menu").addEventListener("click",e=>{ const b=e.target.closest("[data-go]"); if(b) showSub(b.dataset.go); });
+$("sub-back").addEventListener("click",e=>{ e.preventDefault(); showSub("menu"); });
+
+/* ---------- Calendario ---------- */
+const pad2 = n => String(n).padStart(2,"0");
+function dayKey(iso){ const d=new Date(iso); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function renderCal(){
+  if(!S.calMonth){ const d=new Date(); S.calMonth=new Date(d.getFullYear(),d.getMonth(),1); }
+  const m=S.calMonth, y=m.getFullYear(), mo=m.getMonth();
+  const mt=m.toLocaleDateString("es-AR",{month:"long",year:"numeric"}); $("cal-title").textContent = mt.charAt(0).toUpperCase()+mt.slice(1);
+  const byDay={};
+  S.log.forEach(r=>{ const k=dayKey(r.fecha); const st=r.abierto&&EST[r.estado]?r.estado:"ok";
+    const o=byDay[k]||(byDay[k]={n:0,st:"ok"}); o.n++; if(EST[st].rank>EST[o.st].rank) o.st=st; });
+  const first=(new Date(y,mo,1).getDay()+6)%7, days=new Date(y,mo+1,0).getDate(), today=dayKey(new Date().toISOString());
+  let h=["L","M","X","J","V","S","D"].map(d=>`<span class="dow">${d}</span>`).join("");
+  for(let i=0;i<first;i++) h+=`<span></span>`;
+  for(let d=1;d<=days;d++){
+    const k=`${y}-${pad2(mo+1)}-${pad2(d)}`, o=byDay[k];
+    h+=`<button type="button" class="day ${o?"d-"+o.st:""} ${k===today?"today":""} ${k===S.calDay?"sel":""}" data-day="${k}" ${o?"":"disabled"} aria-label="${d}${o?`: ${o.n} registro${o.n>1?"s":""}`:""}">${d}${o?`<small>${o.n}</small>`:""}</button>`;
+  }
+  $("cal").innerHTML=h;
+}
+$("cal").addEventListener("click",e=>{ const b=e.target.closest("[data-day]"); if(!b) return; S.calDay = S.calDay===b.dataset.day?null:b.dataset.day; renderLog(); });
+$("cal-prev").addEventListener("click",()=>{ S.calMonth=new Date(S.calMonth.getFullYear(),S.calMonth.getMonth()-1,1); renderCal(); });
+$("cal-next").addEventListener("click",()=>{ S.calMonth=new Date(S.calMonth.getFullYear(),S.calMonth.getMonth()+1,1); renderCal(); });
+$("log-filter").addEventListener("click",e=>{ if(e.target.id==="log-all"){ e.preventDefault(); S.calDay=null; renderLog(); } });
+
+/* ---------- Eliminados (30 días) ---------- */
+const KEEP_DAYS=30;
+const daysLeft = p => Math.max(0, KEEP_DAYS - Math.floor((Date.now()-new Date(p.eliminado).getTime())/86400000));
+function renderTrash(){
+  const gone=[...S.planes.values()].filter(p=>p.eliminado).sort((a,b)=>a.eliminado<b.eliminado?1:-1);
+  $("trash").hidden=!gone.length;
+  $("trash-list").innerHTML=gone.map(p=>`<div class="trash-item"><span><b class="mono">${esc(p.matricula)}</b> <span class="muted">${esc(p.modelo||"")}</span><br>
+    <span class="small muted">Eliminado el ${esc(fmt(p.eliminado))}${p.eliminadoPor?` por ${esc(p.eliminadoPor)}`:""} · quedan ${daysLeft(p)} días</span></span>
+    <button type="button" data-restore="${esc(p.id)}">Restaurar</button></div>`).join("");
+}
+$("trash-list").addEventListener("click",async e=>{
+  const b=e.target.closest("[data-restore]"); if(!b) return; b.disabled=true;
+  try{ await S.db.doc("aviones/"+b.dataset.restore).update({eliminado:null,eliminadoPor:null}); }
+  catch(err){ b.disabled=false; b.textContent=writeErr(err); }
+});
+// Borra para siempre los aviones que pasaron 30 días en Eliminados
+async function purgeOld(){
+  for(const p of [...S.planes.values()].filter(p=>p.eliminado && daysLeft(p)===0)){
+    try{
+      const regs=await S.db.collection(`aviones/${p.id}/registros`).limit(1000).get();
+      for(const d of regs.docs) await S.db.doc(`aviones/${p.id}/registros/${d.id}`).delete();
+      if(S.assets) for(const m of (p.manuales||[])) if(m.tipo==="archivo"){ try{ await S.assets.delete(m.assetId); }catch(_){} }
+      await S.db.doc("aviones/"+p.id).delete();
+    }catch(_){}
+  }
+}
+
+/* ---------- Arranque ---------- */
+function boot(){
+  setKind("pm");
+  S.db=DB; S.downloads=DOWNLOADS; S.assets=null;
+  $("m-file-box").hidden=true;
+  if(!CFG.firebase){ $("banner").hidden=false; $("banner").textContent="Falta configurar Firebase en config.js."; }
+  if(lsGet("bitacora-rol")==="alumno") setRole("alumno");
+  route();
+  // Al volver a abrir la página, la sesión de Google se recupera sola
+  let first=true;
+  onAuthStateChanged(auth,async u=>{
+    S.uid=u?u.uid:null;
+    if(first){ first=false; const r0=lsGet("bitacora-rol"); if(u && (r0==="profesor"||r0==="admin")) try{ await enterAs(r0,u); }catch(_){} }
+    if(!u && (S.role==="profesor"||S.role==="admin")){ setRole(null); route(); }
+  });
+  DB.collection("aviones").onSnapshot(snap=>{
+    S.planes=new Map(snap.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+    S.loaded=true;
+    $("seed-box").hidden = S.planes.size>0;
+    if(S.current) renderDetail(); else renderFleet();
+    if(S.role==="admin" && !S.purged){ S.purged=true; purgeOld(); }
+  },err=>{ S.loaded=true; $("fleet").innerHTML=`<div class="empty">No se pudo leer la lista de aviones.</div>`; });
+}
+boot();
+</script>
+
+</body>
+</html>

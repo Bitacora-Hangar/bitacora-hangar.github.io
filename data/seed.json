@@ -1,0 +1,31 @@
+{
+ "aviones": [
+  {
+   "avisosAbiertos": 0,
+   "creado": "2026-10-19T23:00:00Z",
+   "estado": "ok",
+   "limites": {
+    "aceitePresMax": 90,
+    "aceitePresMin": 60,
+    "aceitePresRalentiMin": 25,
+    "aceiteTempMax": 118,
+    "chtMax": 232,
+    "combPresMax": 26,
+    "combPresMin": 20,
+    "rpmMax": 2575,
+    "vacioMax": 5,
+    "vacioMin": 3.8
+   },
+   "limitesFuente": "Manual de mantenimiento 500U, Fig. 4-14 (pág. 4-25) y Fig. 8-3 (págs. 8-7 y 8-8). La caída de magnetos no figura en este manual: consultar el manual del operador de Lycoming.",
+   "manuales": [],
+   "matricula": "T-143",
+   "modelo": "Aero Commander 500U",
+   "motorModelo": "Lycoming IO-540-E1A5 / E1B5",
+   "motores": 2,
+   "notas": "",
+   "ultimo": null,
+   "id": "av-t-143",
+   "registros": []
+  }
+ ]
+}

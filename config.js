@@ -10,7 +10,7 @@ window.APP_CONFIG = {
     appId: "1:348693067722:web:243e188261cc2eabfd4133"
   },
   // Cuentas de Google con rol de administrador (deben coincidir con firestore.rules).
-  adminEmails: [],
+  adminEmails: ["agustinsekul@impatrq.com"],
   // URL del script de Google que avisa por mail al administrador (ver notificar-admin.gs).
   mailWebhook: ""
 };

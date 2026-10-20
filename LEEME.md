@@ -22,8 +22,8 @@ App web del taller: cada avión tiene un QR que abre sus manuales y su bitácora
 
 1. En Firebase: activar Authentication con Google, crear Firestore y agregar el dominio `USUARIO.github.io` en Authentication > Configuración > Dominios autorizados.
 2. Completar `config.js` con el `firebaseConfig` y el mail del administrador.
-3. Firestore > Reglas: pegar `firestore.rules` (reemplazando `ADMIN_EMAIL`) y publicar.
-4. Aviso por mail: en script.google.com crear un proyecto, pegar `notificar-admin.gs` (reemplazando `ADMIN_EMAIL`), Implementar > Nueva implementación > Aplicación web, ejecutar como "Yo", acceso "Cualquier usuario". Copiar la URL en `mailWebhook` de `config.js`.
+3. Firestore > Reglas: pegar `firestore.rules` y publicar.
+4. Aviso por mail: en script.google.com crear un proyecto, pegar `notificar-admin.gs`, Implementar > Nueva implementación > Aplicación web, ejecutar como "Yo", acceso "Cualquier usuario". Copiar la URL en `mailWebhook` de `config.js`.
 5. GitHub: Settings > Pages > Deploy from a branch > `main` / root.
 6. Entrar como administrador y tocar "Cargar los aviones iniciales".
 7. Manuales: subirlos a Google Drive, compartirlos con quien corresponda y agregarlos en la app con "Agregar manual por enlace".

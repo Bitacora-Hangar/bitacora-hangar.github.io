@@ -5,7 +5,7 @@ service cloud.firestore {
     // Mantener esta lista igual a adminEmails en config.js
     function isAdmin() {
       return signedIn() && request.auth.token.email_verified == true
-        && request.auth.token.email in ['ADMIN_EMAIL'];
+        && request.auth.token.email in ['agustinsekul@impatrq.com'];
     }
     function isProf() {
       return signedIn() && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid))

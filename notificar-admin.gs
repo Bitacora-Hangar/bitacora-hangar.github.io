@@ -1,7 +1,7 @@
 // Script de Google Apps Script: avisa por mail al administrador cuando un profesor pide acceso.
 // Se publica como "Aplicación web" (ejecutar como: yo; acceso: cualquier usuario)
 // y su URL se pega en config.js como mailWebhook.
-const ADMIN_EMAIL = 'ADMIN_EMAIL';
+const ADMIN_EMAIL = 'agustinsekul@impatrq.com';
 
 function doPost(e) {
   const d = JSON.parse(e.postData.contents || '{}');

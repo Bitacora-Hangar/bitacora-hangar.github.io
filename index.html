@@ -409,6 +409,11 @@ details>summary{cursor:pointer;font-weight:600}
       <div class="panel">
         <div class="row" style="justify-content:space-between"><h2>Historial</h2><span id="log-filter" class="small"></span></div>
         <div id="d-log" class="log"></div>
+        <details id="reg-trash" class="panel admin-only" hidden>
+          <summary>Registros borrados</summary>
+          <div class="small muted">Se pueden restaurar durante 30 días. Después se borran solos.</div>
+          <div id="reg-trash-list"></div>
+        </details>
       </div>
       </div>
 
@@ -1022,7 +1027,10 @@ function subscribeLog(){
   const id=S.current;
   S.logUnsub=S.db.collection(`aviones/${id}/registros`).orderBy("fecha","desc").limit(300).onSnapshot(snap=>{
     if(S.current!==id) return;
-    S.log=snap.docs.map(d=>({id:d.id,...d.data()}));
+    const all=snap.docs.map(d=>({id:d.id,...d.data()}));
+    // Los registros borrados por el administrador quedan aparte 30 días
+    S.log=all.filter(r=>!r.eliminado); S.logGone=all.filter(r=>r.eliminado);
+    if(S.role==="admin") purgeRegs(id);
     renderLog();
   },err=>{ $("d-log").innerHTML=`<div class="empty">No se pudo leer el historial.</div>`; });
 }
@@ -1059,9 +1067,14 @@ function renderLog(){
         ${details(r,p)}
         <div class="small muted">${esc(r.autor)}${r.aprobadoPor?` (alumno) · aprobó ${esc(r.aprobadoPor)}`:""}${r.datos?.supervisa?` · supervisó ${esc(r.datos.supervisa)}`:""}${r.datos?.verifico?` · verificó ${esc(r.datos.verifico)}`:""}</div>
         ${trail(r)}
-        <div class="prof-only"><button type="button" class="ghost small" data-pdf="${esc(r.id)}">Descargar PDF</button> <span class="msg" id="pdfm-${esc(r.id)}"></span></div>
+        <div class="prof-only"><button type="button" class="ghost small" data-pdf="${esc(r.id)}">Descargar PDF</button> <button type="button" class="ghost small admin-only" data-delreg="${esc(r.id)}">Borrar registro</button> <span class="msg" id="pdfm-${esc(r.id)}"></span></div>
       </div></div>`).join("")
     : `<div class="muted">Sin registros. El primero que haga una puesta en marcha o un mantenimiento lo carga arriba.</div>`;
+  const gone=S.logGone||[];
+  $("reg-trash").hidden=!gone.length;
+  $("reg-trash-list").innerHTML=gone.map(r=>`<div class="trash-item"><span><b>${esc(r.tipo)}</b> <span class="small muted mono">${esc(fmt(r.fecha))}</span> · ${esc(r.autor)}<br>
+    <span class="small muted">${esc(r.texto)}</span><br><span class="small muted">Borrado el ${esc(fmt(r.eliminado))}${r.eliminadoPor?` por ${esc(r.eliminadoPor)}`:""} · quedan ${daysLeft(r)} días</span></span>
+    <button type="button" data-resreg="${esc(r.id)}">Restaurar</button></div>`).join("");
 }
 function details(r,p){
   const d=r.datos||{};
@@ -1130,10 +1143,10 @@ $("d-alerts").addEventListener("click",async e=>{
 // Recalcula el estado general del avión a partir de sus avisos abiertos
 async function refreshSummary(id){
   const col=S.db.collection(`aviones/${id}/registros`);
-  const [open,last]=await Promise.all([col.where("abierto","==",true).get(), col.orderBy("fecha","desc").limit(1).get()]);
+  const [open,last]=await Promise.all([col.where("abierto","==",true).get(), col.orderBy("fecha","desc").limit(20).get()]);
   let estado="ok";
   open.docs.forEach(d=>{ const s=d.data().estado; if(EST[s] && EST[s].rank>EST[estado].rank) estado=s; });
-  const l=last.docs[0]?.data();
+  const l=last.docs.map(d=>d.data()).find(d=>!d.eliminado);
   await S.db.doc("aviones/"+id).update({estado,avisosAbiertos:open.size,ultimo:l?{fecha:l.fecha,tipo:l.tipo,autor:l.autor}:null});
 }
 
@@ -1341,6 +1354,28 @@ async function downloadPdf(r,p,msgId){
 }
 $("saved-pdf").addEventListener("click",()=>{ if(S.lastSaved) downloadPdf(S.lastSaved.r,S.lastSaved.p,"saved-msg"); });
 $("saved-close").addEventListener("click",()=>{ $("saved-box").hidden=true; $("kind-pick").hidden=false; });
+// Administrador: borrar un registro mal cargado (dos toques) y restaurarlo
+$("d-log").addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-delreg]"); if(!b) return;
+  const r=S.log.find(x=>x.id===b.dataset.delreg); if(!r) return;
+  if(b.dataset.armed!=="1"){ b.dataset.armed="1"; b.textContent="Tocá de nuevo para borrar"; b.classList.add("danger"); return; }
+  b.disabled=true;
+  try{
+    await S.db.doc(`aviones/${S.current}/registros/${r.id}`).update({eliminado:now(),eliminadoPor:S.prof,abierto:false,abiertoAntes:!!r.abierto});
+    await refreshSummary(S.current);
+  }catch(err){ b.disabled=false; msg("pdfm-"+r.id,writeErr(err),"err"); }
+});
+$("reg-trash-list").addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-resreg]"); if(!b) return;
+  const r=(S.logGone||[]).find(x=>x.id===b.dataset.resreg); if(!r) return; b.disabled=true;
+  try{
+    await S.db.doc(`aviones/${S.current}/registros/${r.id}`).update({eliminado:null,eliminadoPor:null,abierto:!!r.abiertoAntes});
+    await refreshSummary(S.current);
+  }catch(err){ b.disabled=false; b.textContent=writeErr(err); }
+});
+async function purgeRegs(id){
+  for(const r of (S.logGone||[]).filter(r=>daysLeft(r)===0)){ try{ await S.db.doc(`aviones/${id}/registros/${r.id}`).delete(); }catch(_){} }
+}
 $("d-log").addEventListener("click",e=>{ const b=e.target.closest("button[data-pdf]"); if(!b) return; const r=S.log.find(x=>x.id===b.dataset.pdf); if(r) downloadPdf(r,plane(),"pdfm-"+r.id); });
 
 /* ---------- Menú del avión ---------- */
@@ -1365,7 +1400,7 @@ function renderMenu(p){
     qr:["Código QR","Etiqueta para imprimir y pegar en el avión"],
     editar:["Datos y límites","Modelo, motores, límites y eliminar avión"]
   };
-  const keys = S.role==="admin" ? ["editar","manuales","qr"] : S.role==="alumno" ? ["registro","manuales"] : ["registro","historial","manuales","qr"];
+  const keys = S.role==="admin" ? ["historial","editar","manuales","qr"] : S.role==="alumno" ? ["registro","manuales"] : ["registro","historial","manuales","qr"];
   $("d-menu").innerHTML = keys.map(k=>`<button type="button" class="tile ${T[k][2]||""}" data-go="${k}"><b>${T[k][0]}</b><span>${esc(T[k][1])}</span></button>`).join("");
 }
 $("d-menu").addEventListener("click",e=>{ const b=e.target.closest("[data-go]"); if(b) showSub(b.dataset.go); });

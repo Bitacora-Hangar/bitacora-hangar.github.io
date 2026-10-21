@@ -37,8 +37,13 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/usuarios/$(request.resource.data.profesorId)).data.estado == 'aprobado';
       allow read: if isAdmin() || (signedIn()
         && (resource.data.alumnoId == request.auth.uid || resource.data.profesorId == request.auth.uid));
+      // El profesor aprueba o rechaza; el alumno puede corregir uno rechazado y volver a mandarlo
       allow update: if isAdmin() || (isProf() && resource.data.profesorId == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revision', 'nota', 'revisado', 'registroId']));
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revision', 'nota', 'revisado', 'registroId']))
+        || (signedIn() && resource.data.alumnoId == request.auth.uid && resource.data.revision == 'rechazado'
+          && request.resource.data.revision == 'pendiente'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rec', 'profesorId', 'profesor', 'revision', 'nota', 'enviado', 'rechazos'])
+          && get(/databases/$(database)/documents/usuarios/$(request.resource.data.profesorId)).data.estado == 'aprobado');
       allow delete: if isAdmin();
     }
 

@@ -284,6 +284,7 @@ details>summary{cursor:pointer;font-weight:600}
         </div>
       <form id="entry-form" class="panel" novalidate hidden>
         <div class="row" style="justify-content:space-between"><h2 id="form-title">Puesta en marcha</h2><button type="button" id="kind-change" class="ghost small">Cambiar tipo</button></div>
+        <div id="fix-note" class="note" hidden></div>
         <div class="field alumno-only"><label for="al-prof">Profesor a cargo *</label><select id="al-prof"><option value="">Elegí un profesor</option></select></div>
 
         <!-- Planilla de puesta en marcha -->
@@ -729,6 +730,7 @@ function renderEnvios(){
       return `<div class="alert a-pendiente">
         <div class="row" style="justify-content:space-between"><b><span class="mono">${esc(x.matricula)}</span> · ${esc(r.tipo)}</b><span class="small muted mono">${esc(fmt(r.fecha))}</span></div>
         <div class="small muted">Cargó ${esc(x.alumno)}${x.alumnoEmail?` (${esc(x.alumnoEmail)})`:""}${r.clase==="comb"?"":` · cómo quedó el avión: ${esc(EST[r.estado]?.label||"")}`}${r.horas?` · ${esc(r.horas)} h`:""}</div>
+        ${x.rechazos?.length?`<div class="small"><b>Corregido por el alumno.</b> Motivo del rechazo anterior: ${esc(x.rechazos[x.rechazos.length-1].nota)}</div>`:""}
         <p>${esc(r.texto)}</p>${details(r,p)}
         <div class="row"><input data-rnote="${esc(x.id)}" placeholder="Comentario para el alumno" style="flex:1 1 200px" value="${esc(typing[x.id]||"")}">
           <button type="button" class="ghost" data-rver="${esc(x.id)}">Ver planilla completa</button>
@@ -741,7 +743,8 @@ function renderEnvios(){
       return `<div class="entry"><div class="when">${esc(fmt(x.enviado))}</div><div class="body">
         <div class="row"><b><span class="mono">${esc(x.matricula)}</span> · ${esc(r.tipo)}</b><span class="chip c-${c}">${l}</span></div>
         <div class="small muted">Profesor: ${esc(x.profesor)}</div>
-        ${x.nota?`<div class="small"><b>Comentario:</b> ${esc(x.nota)}</div>`:""}</div></div>`; }).join("");
+        ${x.nota?`<div class="small"><b>Comentario:</b> ${esc(x.nota)}</div>`:""}
+        ${x.revision==="rechazado"?`<div class="row"><button type="button" class="primary small" data-fix="${esc(x.id)}">Corregir y reenviar</button></div>`:""}</div></div>`; }).join("");
   }
 }
 // Muestra el PDF con todo lo que cargó el alumno, todavía sin aprobar
@@ -777,6 +780,56 @@ $("review-list").addEventListener("click",async e=>{
   }catch(err){ msg(mid,writeErr(err),"err"); b.disabled=false; }
 });
 
+// Alumno: corregir un registro rechazado y volver a mandarlo
+$("sent-list").addEventListener("click",e=>{
+  const b=e.target.closest("[data-fix]"); if(!b) return;
+  const x=(S.envios||[]).find(v=>v.id===b.dataset.fix); if(!x) return;
+  if(!S.planes.get(x.avionId)) return;
+  S.fixPend=x;
+  if(location.hash.slice(1)!==x.avionId) location.hash=x.avionId; else startFix();
+});
+function startFix(){
+  const x=S.fixPend, p=plane(); S.fixPend=null; if(!x||!p) return;
+  showSub("registro"); S.fixing=x;
+  $("saved-box").hidden=true; resetEntryForm(); setKind(x.rec.clase);
+  $("kind-pick").hidden=true; $("entry-form").hidden=false; $("kind-change").hidden=true;
+  fillForm(x.rec,p);
+  if([...$("al-prof").options].some(o=>o.value===x.profesorId)) $("al-prof").value=x.profesorId;
+  $("fix-note").hidden=false;
+  $("fix-note").innerHTML=`<b>Corregís un registro que rechazó ${esc(x.profesor)}.</b><br>Motivo: ${esc(x.nota||"sin comentario")}`;
+  $("e-submit").textContent="Reenviar al profesor";
+  window.scrollTo(0,0);
+}
+function endFix(){
+  S.fixing=null; $("fix-note").hidden=true; $("kind-change").hidden=false;
+  $("e-submit").textContent = S.role==="alumno" ? "Enviar al profesor" : "Guardar registro";
+}
+// Vuelve a poner en la planilla lo que ya se había cargado
+function fillForm(r,p){
+  const d=r.datos||{};
+  const set=(id,v)=>{ const i=$(id); if(!i) return; if(i.type==="checkbox") i.checked=!!v; else i.value=(v===null||v===undefined)?"":v; };
+  set("e-state",r.estado||"ok"); set("e-text",r.texto);
+  if(r.clase==="pm"){
+    [["pm-motivo",d.motivo],["pm-trabajo",d.trabajo],["pm-sup",d.supervisa],["pm-hi",d.horaInicio],["pm-hf",d.horaFin],["pm-oat",d.oat],
+     ["pm-hob1",d.horometroInicio],["pm-hob2",d.horometroFin],["pm-fuel",d.combustible],["pm-vac",d.vacio],["pm-c-fugas",d.sinFugas]].forEach(([i,v])=>set(i,v));
+    SAFETY.forEach(([k])=>set("pm-c-"+k,d.seguridad?.[k]));
+    Object.entries(d.motores||{}).forEach(([e,o])=>PM.forEach(row=>{ if(row.t==="c"||row.t==="n") set(`pm-${e}-${row.k}`,o[row.k]); }));
+    checkPm();
+  } else if(r.clase==="mant"){
+    [["mt-tipo",d.tipoTrabajo],["mt-sis",d.sistema],["mt-ref",d.referencia],["mt-motivo",d.motivo],["mt-hc",d.horasCelula],
+     ["mt-ver",d.verifico],["mt-prueba",d.pruebaFuncional],["mt-pend",d.pendientes]].forEach(([i,v])=>set(i,v));
+    Object.entries(d.horasMotor||{}).forEach(([e,v])=>set("mt-hm-"+e,v));
+    (d.repuestos||[]).forEach(x=>{ const row=partRow(); row.querySelectorAll("input").forEach(i=>i.value=x[i.dataset.f]||""); $("mt-parts").appendChild(row); });
+  } else if(r.clase==="comb"){
+    const known=[...$("cb-tipo").options].some(o=>o.value===d.combustible);
+    set("cb-tipo",known?d.combustible:"Otro"); set("cb-otro",known?"":d.combustible);
+    $("cb-tipo").dispatchEvent(new Event("change"));
+    [["cb-lt",d.litros],["cb-izq",d.tanqueIzq],["cb-der",d.tanqueDer],["cb-tope",d.aTope],["cb-hob",d.horometro],["cb-orig",d.origen],
+     ["cb-lote",d.lote],["cb-ver",d.verifico],["cb-costo",d.costo],["cb-muestra",d.muestra]].forEach(([i,v])=>set(i,v));
+    CB_CHECKS.forEach(([c])=>set("cb-c-"+c,d.controles?.[c]));
+  }
+}
+
 /* ---------- Navegación ---------- */
 function route(){
   const id = (location.hash||"").slice(1);
@@ -807,6 +860,7 @@ function openDetail(id){
     window.scrollTo(0,0);
   }
   renderDetail();
+  if(S.fixPend && S.fixPend.avionId===id) startFix();
 }
 
 /* ---------- Lista ---------- */
@@ -1005,8 +1059,12 @@ $("entry-form").addEventListener("submit",async e=>{
       texto:texto||(datos.fuera?.length?"Valores fuera de límite en la puesta en marcha.":(k==="pm"?"Puesta en marcha sin observaciones.":k==="comb"?`${datos.litros} L de ${datos.combustible}.`:"")),horas,datos,autor:isAl?S.prof:myName(),autorId:S.uid,seguimiento:[]};
     if(isAl){
       // Queda pendiente hasta que el profesor elegido lo apruebe
-      await S.db.collection("envios").add({avionId:id,matricula:p.matricula,rec,alumno:S.prof,alumnoId:S.uid,alumnoEmail:S.alumnoEmail||"",
+      const fx=S.fixing && S.fixing.avionId===id ? S.fixing : null;
+      if(fx) await S.db.doc("envios/"+fx.id).update({rec,profesorId:pr.id,profesor:pr.nombre,revision:"pendiente",nota:"",enviado:rec.fecha,
+        rechazos:[...(fx.rechazos||[]),{fecha:fx.revisado||"",nota:fx.nota||"",profesor:fx.profesor}]});
+      else await S.db.collection("envios").add({avionId:id,matricula:p.matricula,rec,alumno:S.prof,alumnoId:S.uid,alumnoEmail:S.alumnoEmail||"",
         profesorId:pr.id,profesor:pr.nombre,revision:"pendiente",enviado:rec.fecha});
+      if(fx) endFix();
       lsSet("bitacora-prof",pr.id);
     } else await S.db.collection(`aviones/${id}/registros`).add(rec);
     resetEntryForm();
@@ -1353,7 +1411,7 @@ async function downloadPdf(r,p,msgId){
   }catch(err){ if(!(err&&err.code==="declined")) msg(msgId,"No se pudo descargar el PDF.","err"); }
 }
 $("saved-pdf").addEventListener("click",()=>{ if(S.lastSaved) downloadPdf(S.lastSaved.r,S.lastSaved.p,"saved-msg"); });
-$("saved-close").addEventListener("click",()=>{ $("saved-box").hidden=true; $("kind-pick").hidden=false; });
+$("saved-close").addEventListener("click",()=>{ endFix(); $("saved-box").hidden=true; $("kind-pick").hidden=false; });
 // Administrador: borrar un registro mal cargado (dos toques) y restaurarlo
 $("d-log").addEventListener("click",async e=>{
   const b=e.target.closest("button[data-delreg]"); if(!b) return;
@@ -1381,6 +1439,7 @@ $("d-log").addEventListener("click",e=>{ const b=e.target.closest("button[data-p
 /* ---------- Menú del avión ---------- */
 function showSub(sub){
   S.sub=sub;
+  if(S.fixing) endFix();
   document.querySelectorAll("[data-sub]").forEach(el=>el.hidden=el.dataset.sub!==sub);
   $("d-menu").hidden = sub!=="menu";
   $("sub-back").hidden = sub==="menu";

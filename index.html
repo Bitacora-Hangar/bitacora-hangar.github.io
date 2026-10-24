@@ -1236,9 +1236,9 @@ async function refreshSummary(id){
 }
 
 /* ---------- Vencimientos de fluidos ---------- */
-// Valores por defecto del Aero Commander 500U (Lycoming IO-540 solo con tamices de aceite). El administrador los cambia por avión.
+// Valores por defecto del Aero Commander 500U (Lycoming IO-540 con filtro de aceite). El administrador los cambia por avión.
 const VENC_DEF = [
-  {id:"aceite",nombre:"Aceite de motor",horas:25,meses:4,porMotor:true},
+  {id:"aceite",nombre:"Aceite y filtro de motor",horas:50,meses:4,porMotor:true},
   {id:"hid",nombre:"Líquido hidráulico y frenos (filtro y control)",horas:100,meses:12},
   {id:"amort",nombre:"Amortiguadores (líquido y nitrógeno)",horas:100,meses:12},
   {id:"bat",nombre:"Batería (electrolito)",dias:30}

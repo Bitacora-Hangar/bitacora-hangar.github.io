@@ -104,6 +104,7 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .venc th{font-size:.78rem;color:var(--muted);font-weight:600}
 .v-ok{color:var(--ok)} .v-warn{color:var(--pend)} .v-over{color:var(--stop)} .v-none{color:var(--muted)}
 .vdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:middle}
+.plane-art svg{width:100%;max-width:560px;height:auto;display:block;margin:0 auto}
 .ve-item{border:1px solid var(--line);border-radius:8px;padding:10px;display:grid;gap:8px}
 .note{font-size:.85rem;color:var(--muted);border-left:3px solid var(--line);padding-left:10px}
 .msg{font-size:.9rem;min-height:1.2em}
@@ -269,7 +270,7 @@ details>summary{cursor:pointer;font-weight:600}
         <span id="d-status" class="chip c-ok staff-only">Operativo</span>
       </div>
 
-      <div id="d-venc" class="panel" hidden></div>
+      <div id="d-art" class="plane-art" hidden></div>
       <div id="d-menu" class="menu"></div>
       <a href="#" id="sub-back" class="back" hidden>← Volver al menú del avión</a>
 
@@ -460,6 +461,9 @@ details>summary{cursor:pointer;font-weight:600}
       </div>
       </div>
 
+      <div data-sub="venc" class="stack" hidden>
+      <div id="d-venc" class="panel"></div>
+      </div>
       <div data-sub="editar" class="stack" hidden>
       <div class="panel" id="venc-box">
         <h2>Vencimientos</h2>
@@ -942,6 +946,8 @@ function renderDetail(){
   $("d-status").className="chip c-"+st; $("d-status").textContent=EST[st].label;
   const sig=p.id+"|"+p.motores+"|"+JSON.stringify(p.limites||{});
   if(S.builtFor!==sig){ S.builtFor=sig; buildSheets(p); fillEdit(p); }
+  const art=/commander|500\s?u/i.test(p.modelo||"");
+  $("d-art").hidden=!art; if(art) $("d-art").innerHTML=planeArt(p.matricula);
   renderManuals(p); renderLog(); renderQR(p); renderVenc(p); renderFluidChecks(p); fillVencEditor(p);
 }
 
@@ -1235,6 +1241,38 @@ async function refreshSummary(id){
   catch(err){ if(Object.keys(extra).length) await S.db.doc("aviones/"+id).update(base); else throw err; }
 }
 
+/* ---------- Dibujo del avión ---------- */
+// Aero Commander 500U de costado, con los colores del T-143 y la matrícula del avión
+const planeArt = reg => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="34 22 556 156" role="img" aria-label="Aero Commander 500U ${esc(reg)}">
+<defs><clipPath id="ac-fus"><path d="M58 100 L300 91 C380 87 430 87 468 91 L516 98 C544 104 564 114 568 125 C566 135 546 141 520 143 L300 146 C200 146 120 131 58 112 Z"/></clipPath></defs>
+<g stroke="#17324d" stroke-width="1.6" stroke-linejoin="round">
+ <path d="M44 99 C70 95 130 95 152 98 L150 102 C120 104 70 104 44 102 Z" fill="#fff"/>
+ <path d="M72 103 L104 30 L134 30 L150 99 Z" fill="#fff"/>
+ <path d="M104 30 L134 30 L131 44 L99 44 Z" fill="#2f6fbf" stroke="none"/>
+ <path d="M72 103 L104 30 L134 30 L150 99 Z" fill="none"/>
+ <rect x="104" y="58" width="22" height="5" fill="#74acdf" stroke="none"/><rect x="104" y="63" width="22" height="5" fill="#fff" stroke="none"/><rect x="104" y="68" width="22" height="5" fill="#74acdf" stroke="none"/>
+ <path d="M58 100 L300 91 C380 87 430 87 468 91 L516 98 C544 104 564 114 568 125 C566 135 546 141 520 143 L300 146 C200 146 120 131 58 112 Z" fill="#fff"/>
+ <g clip-path="url(#ac-fus)" stroke="none">
+  <path d="M40 120 C150 132 260 134 600 128 L600 160 L40 160 Z" fill="#2f6fbf"/>
+  <path d="M548 92 C539 108 539 130 548 150 L600 150 L600 92 Z" fill="#2f6fbf"/>
+ </g>
+ <path d="M58 100 L300 91 C380 87 430 87 468 91 L516 98 C544 104 564 114 568 125 C566 135 546 141 520 143 L300 146 C200 146 120 131 58 112 Z" fill="none"/>
+ <path d="M478 93 L512 98 C522 102 528 107 530 111 L486 109 Z" fill="#1d3f66"/>
+ <g fill="#1d3f66" stroke="none"><rect x="292" y="101" width="16" height="11" rx="3"/><rect x="315" y="100" width="16" height="11" rx="3"/><rect x="269" y="102" width="16" height="11" rx="3"/></g>
+ <path d="M328 90 C360 81 420 81 448 87 L448 92 L328 94 Z" fill="#fff"/>
+ <path d="M352 94 L452 94 C468 96 477 101 478 106 C477 111 467 114 452 114 L362 113 C352 109 349 101 352 94 Z" fill="#fff"/>
+ <path d="M440 95 L452 94 C468 96 477 101 478 106 C477 111 467 114 452 114 L440 114 Z" fill="#2f6fbf"/>
+ <ellipse cx="481" cy="106" rx="5" ry="7" fill="#c9d3dd"/>
+ <path d="M483 68 L486 68 L486 144 L483 144 Z" fill="#9aa8b6" stroke="#5b6b7b" stroke-width="1"/>
+ <path d="M406 113 L404 150" fill="none" stroke-width="3"/>
+ <circle cx="403" cy="158" r="11" fill="#2b3640"/><circle cx="403" cy="158" r="4" fill="#c9d3dd"/>
+ <path d="M534 141 L536 160" fill="none" stroke-width="3"/>
+ <circle cx="536" cy="165" r="8" fill="#2b3640"/><circle cx="536" cy="165" r="3" fill="#c9d3dd"/>
+ <circle cx="150" cy="114" r="11" fill="#74acdf"/><circle cx="150" cy="114" r="7" fill="#fff"/><circle cx="150" cy="114" r="3.2" fill="#74acdf"/>
+</g>
+<text x="168" y="122" font-family="Arial,Helvetica,sans-serif" font-weight="700" font-size="22" textLength="${Math.min(110,reg.length*14)}" lengthAdjust="spacingAndGlyphs" fill="#17324d">${esc(reg)}</text>
+</svg>`;
+
 /* ---------- Vencimientos de fluidos ---------- */
 // Valores por defecto del Aero Commander 500U (Lycoming IO-540 con filtro de aceite). El administrador los cambia por avión.
 const VENC_DEF = [
@@ -1281,8 +1319,7 @@ function vencLine(p){
 const V_LBL={ok:"Al día",warn:"Por vencer",over:"Vencido",none:"Sin dato"};
 function renderVenc(p){
   const box=$("d-venc"), ks=vencKeys(p);
-  box.hidden=!S.role || !ks.length || S.sub!=="menu";
-  if(box.hidden) return;
+  if(!ks.length){ box.innerHTML=`<div class="muted">Este avión no tiene vencimientos cargados.</div>`; return; }
   const rows=ks.map(k=>({k,v:vencState(p,k)})).sort((a,b)=>b.v.rank-a.v.rank || a.v.score-b.v.score);
   const iv=it=>[it.horas?`${it.horas} h`:"",it.meses?`${it.meses} ${it.meses===1?"mes":"meses"}`:"",it.dias?`${it.dias} días`:""].filter(Boolean).join(" o ");
   box.innerHTML=`<div class="row" style="justify-content:space-between"><h2>Vencimientos</h2><span class="small muted mono">${isNum(p.horometro)?`Horómetro: ${p.horometro} h`:"Sin horómetro cargado"}</span></div>
@@ -1595,7 +1632,6 @@ function showSub(sub){
   if(S.fixing) endFix();
   document.querySelectorAll("[data-sub]").forEach(el=>el.hidden=el.dataset.sub!==sub);
   $("d-menu").hidden = sub!=="menu";
-  if(plane()) renderVenc(plane());
   $("sub-back").hidden = sub==="menu";
   if(sub==="registro"){
     if($("saved-box").hidden){ $("kind-pick").hidden=false; $("entry-form").hidden=true; }
@@ -1605,15 +1641,17 @@ function showSub(sub){
   window.scrollTo(0,0);
 }
 function renderMenu(p){
+  const vw=vencWorst(p);
   const n=p.avisosAbiertos||0, docs=(p.manuales||[]).length;
   const T = {
     registro:["Nuevo registro",S.role==="alumno"?"Lo completás y lo aprueba tu profesor":"Puesta en marcha, mantenimiento u observación"],
     historial:["Historial", n?`${n} aviso${n>1?"s":""} activo${n>1?"s":""}`:"Registros y calendario", n?"t-warn":""],
     manuales:["Manuales",`${docs} documento${docs===1?"":"s"}`],
     qr:["Código QR","Etiqueta para imprimir y pegar en el avión"],
-    editar:["Datos y límites","Modelo, motores, límites y eliminar avión"]
+    editar:["Datos y límites","Modelo, motores, límites, vencimientos y eliminar avión"],
+    venc:["Vencimientos",vw?(vw.v.cls==="none"?"Falta cargar el último cambio":`${vw.k.label.replace(/ \(.*?\)/,"")}: ${V_LBL[vw.v.cls].toLowerCase()}`):"Aceite, hidráulico y otros fluidos",vw&&(vw.v.cls==="over"||vw.v.cls==="warn")?"t-warn":""]
   };
-  const keys = S.role==="admin" ? ["historial","editar","manuales","qr"] : S.role==="alumno" ? ["registro","manuales"] : ["registro","historial","manuales","qr"];
+  const keys = S.role==="admin" ? ["historial","venc","editar","manuales","qr"] : S.role==="alumno" ? ["registro","venc","manuales"] : ["registro","historial","venc","manuales","qr"];
   $("d-menu").innerHTML = keys.map(k=>`<button type="button" class="tile ${T[k][2]||""}" data-go="${k}"><b>${T[k][0]}</b><span>${esc(T[k][1])}</span></button>`).join("");
 }
 $("d-menu").addEventListener("click",e=>{ const b=e.target.closest("[data-go]"); if(b) showSub(b.dataset.go); });

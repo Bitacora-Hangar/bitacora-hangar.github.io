@@ -99,6 +99,12 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .check{display:flex;align-items:center;gap:8px;font-size:.95rem}
 .checks{display:flex;flex-wrap:wrap;gap:8px 18px}
 .banner{border-radius:8px;padding:10px 14px;background:var(--pend-bg);color:var(--ink);border:1px solid var(--pend)}
+.venc{width:100%;border-collapse:collapse;font-size:.9rem}
+.venc th,.venc td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.venc th{font-size:.78rem;color:var(--muted);font-weight:600}
+.v-ok{color:var(--ok)} .v-warn{color:var(--pend)} .v-over{color:var(--stop)} .v-none{color:var(--muted)}
+.vdot{display:inline-block;width:9px;height:9px;border-radius:50%;background:currentColor;margin-right:6px;vertical-align:middle}
+.ve-item{border:1px solid var(--line);border-radius:8px;padding:10px;display:grid;gap:8px}
 .note{font-size:.85rem;color:var(--muted);border-left:3px solid var(--line);padding-left:10px}
 .msg{font-size:.9rem;min-height:1.2em}
 .msg.err{color:var(--stop)} .msg.ok{color:var(--ok)}
@@ -263,6 +269,7 @@ details>summary{cursor:pointer;font-weight:600}
         <span id="d-status" class="chip c-ok staff-only">Operativo</span>
       </div>
 
+      <div id="d-venc" class="panel" hidden></div>
       <div id="d-menu" class="menu"></div>
       <a href="#" id="sub-back" class="back" hidden>← Volver al menú del avión</a>
 
@@ -340,6 +347,11 @@ details>summary{cursor:pointer;font-weight:600}
             <div class="field"><label for="mt-ver">Verificó (inspector)</label><input id="mt-ver" placeholder="Doble firma en tareas críticas"></div>
           </div>
           <div class="field"><label for="mt-motivo">Motivo o discrepancia encontrada</label><input id="mt-motivo" placeholder="Ej.: caída de magneto R alta en la última puesta en marcha"></div>
+          <div class="block" id="mt-fl-wrap">
+            <span class="lbl">Fluidos cambiados en este trabajo</span>
+            <div class="checks" id="mt-fluidos"></div>
+            <div class="small muted">Lo que marques vuelve a empezar su vencimiento desde la fecha y las horas de este registro.</div>
+          </div>
           <div class="block">
             <div class="row" style="justify-content:space-between"><span class="lbl">Repuestos usados</span><button type="button" id="mt-addpart" class="ghost small">Agregar repuesto</button></div>
             <div id="mt-parts" class="parts"></div>
@@ -449,6 +461,13 @@ details>summary{cursor:pointer;font-weight:600}
       </div>
 
       <div data-sub="editar" class="stack" hidden>
+      <div class="panel" id="venc-box">
+        <h2>Vencimientos</h2>
+        <div class="small muted">Cada fluido vence por horas o por tiempo, lo que llegue primero. Las horas salen del horómetro de los registros. Si el último cambio no está en la bitácora, cargalo acá.</div>
+        <div class="field" style="max-width:260px"><label for="ve-hob">Horómetro actual (si no hay registros con horas)</label><input id="ve-hob" inputmode="decimal" class="mono"></div>
+        <div id="ve-list" class="stack"></div>
+        <div class="row"><button type="button" id="ve-add" class="ghost small">Agregar fluido</button><button type="button" id="ve-save" class="primary">Guardar vencimientos</button><span id="ve-msg" class="msg"></span></div>
+      </div>
       <div class="panel" id="edit-box">
         <h2>Datos y límites</h2>
         <form id="edit-form" class="stack" style="gap:12px">
@@ -818,6 +837,7 @@ function fillForm(r,p){
   } else if(r.clase==="mant"){
     [["mt-tipo",d.tipoTrabajo],["mt-sis",d.sistema],["mt-ref",d.referencia],["mt-motivo",d.motivo],["mt-hc",d.horasCelula],
      ["mt-ver",d.verifico],["mt-prueba",d.pruebaFuncional],["mt-pend",d.pendientes]].forEach(([i,v])=>set(i,v));
+    document.querySelectorAll("#mt-fluidos input").forEach(i=>i.checked=(d.fluidos||[]).includes(i.value));
     Object.entries(d.horasMotor||{}).forEach(([e,v])=>set("mt-hm-"+e,v));
     (d.repuestos||[]).forEach(x=>{ const row=partRow(); row.querySelectorAll("input").forEach(i=>i.value=x[i.dataset.f]||""); $("mt-parts").appendChild(row); });
   } else if(r.clase==="comb"){
@@ -886,6 +906,7 @@ function renderFleet(){
       <div class="row" style="justify-content:space-between"><span class="reg mono">${esc(p.matricula)}</span><span class="chip c-${st}">${EST[st].label}</span></div>
       <div class="muted">${esc(p.modelo||"Modelo sin cargar")}</div>
       <div class="small">${n?`<b>${n} aviso${n>1?"s":""} activo${n>1?"s":""}</b>`:"Sin avisos activos"}</div>
+      ${vencLine(p)}
       <div class="small muted">${last}</div></a>`;
   }).join("");
 }
@@ -921,7 +942,7 @@ function renderDetail(){
   $("d-status").className="chip c-"+st; $("d-status").textContent=EST[st].label;
   const sig=p.id+"|"+p.motores+"|"+JSON.stringify(p.limites||{});
   if(S.builtFor!==sig){ S.builtFor=sig; buildSheets(p); fillEdit(p); }
-  renderManuals(p); renderLog(); renderQR(p);
+  renderManuals(p); renderLog(); renderQR(p); renderVenc(p); renderFluidChecks(p); fillVencEditor(p);
 }
 
 /* ---------- Planillas ---------- */
@@ -1038,7 +1059,8 @@ $("entry-form").addEventListener("submit",async e=>{
     const parts=[...$("mt-parts").querySelectorAll(".part")].map(row=>Object.fromEntries([...row.querySelectorAll("input")].map(i=>[i.dataset.f,i.value.trim()]))).filter(x=>Object.values(x).some(Boolean));
     datos={tipoTrabajo:$("mt-tipo").value,sistema:$("mt-sis").value,referencia:$("mt-ref").value.trim(),motivo:$("mt-motivo").value.trim(),
       horasCelula:num($("mt-hc").value),horasMotor:Object.fromEntries(engines(p).map(([e])=>[e,num($("mt-hm-"+e)?.value)])),
-      verifico:$("mt-ver").value.trim(),pruebaFuncional:$("mt-prueba").checked,pendientes:$("mt-pend").value.trim(),repuestos:parts};
+      verifico:$("mt-ver").value.trim(),pruebaFuncional:$("mt-prueba").checked,pendientes:$("mt-pend").value.trim(),repuestos:parts,
+      fluidos:[...document.querySelectorAll("#mt-fluidos input:checked")].map(i=>i.value)};
     tipo=datos.tipoTrabajo;
     horas = isNum(datos.horasCelula)?String(datos.horasCelula):"";
   } else if(k==="comb"){
@@ -1151,7 +1173,7 @@ function details(r,p){
   }
   if(r.clase==="mant"){
     const hm=Object.entries(d.horasMotor||{}).filter(([,v])=>isNum(v)).map(([e,v])=>`${({izq:"izq.",der:"der.",m:""})[e]||e} ${v}`).join(", ");
-    const kv=[["Sistema",d.sistema],["Referencia",d.referencia],["Motivo",d.motivo],["Horas motor",hm],["Prueba funcional",d.pruebaFuncional?"Sí":""],["Pendientes",d.pendientes]].filter(([,v])=>v);
+    const kv=[["Sistema",d.sistema],["Referencia",d.referencia],["Motivo",d.motivo],["Horas motor",hm],["Prueba funcional",d.pruebaFuncional?"Sí":""],["Pendientes",d.pendientes],["Fluidos cambiados",fluidNames(p,d.fluidos)]].filter(([,v])=>v);
     const parts=(d.repuestos||[]).map(x=>[x.cant&&x.cant+"×",x.np,x.desc,x.ns&&"S/N "+x.ns,x.cert&&"cert. "+x.cert].filter(Boolean).join(" "));
     return `<div class="kv">${kv.map(([k,v])=>`<span><b>${k}:</b> ${esc(v)}</span>`).join("")}</div>
       ${parts.length?`<div class="small"><b>Repuestos:</b> ${parts.map(esc).join(" · ")}</div>`:""}`;
@@ -1205,8 +1227,139 @@ async function refreshSummary(id){
   let estado="ok";
   open.docs.forEach(d=>{ const s=d.data().estado; if(EST[s] && EST[s].rank>EST[estado].rank) estado=s; });
   const l=last.docs.map(d=>d.data()).find(d=>!d.eliminado);
-  await S.db.doc("aviones/"+id).update({estado,avisosAbiertos:open.size,ultimo:l?{fecha:l.fecha,tipo:l.tipo,autor:l.autor}:null});
+  const base={estado,avisosAbiertos:open.size,ultimo:l?{fecha:l.fecha,tipo:l.tipo,autor:l.autor}:null};
+  // Horas actuales y último cambio de cada fluido, para los vencimientos
+  let extra={};
+  try{ extra=await calcServicios(id); }catch(_){}
+  try{ await S.db.doc("aviones/"+id).update({...base,...extra}); }
+  catch(err){ if(Object.keys(extra).length) await S.db.doc("aviones/"+id).update(base); else throw err; }
 }
+
+/* ---------- Vencimientos de fluidos ---------- */
+// Valores por defecto del Aero Commander 500U (Lycoming IO-540 solo con tamices de aceite). El administrador los cambia por avión.
+const VENC_DEF = [
+  {id:"aceite",nombre:"Aceite de motor",horas:25,meses:4,porMotor:true},
+  {id:"hid",nombre:"Líquido hidráulico y frenos (filtro y control)",horas:100,meses:12},
+  {id:"amort",nombre:"Amortiguadores (líquido y nitrógeno)",horas:100,meses:12},
+  {id:"bat",nombre:"Batería (electrolito)",dias:30}
+];
+const vencItems = p => Array.isArray(p?.vencimientos) ? p.vencimientos : VENC_DEF;
+function vencKeys(p){
+  const E=engines(p), out=[];
+  vencItems(p).forEach(it=>{
+    if(it.porMotor && E.length>1) E.forEach(([e,l])=>out.push({key:it.id+"|"+e,label:`${it.nombre} · ${l.toLowerCase()}`,it}));
+    else out.push({key:it.porMotor?it.id+"|"+E[0][0]:it.id,label:it.nombre,it});
+  });
+  return out;
+}
+function fluidNames(p,keys){ if(!keys||!keys.length) return ""; const m=Object.fromEntries(vencKeys(p).map(k=>[k.key,k.label])); return keys.map(k=>m[k]||k).join(", "); }
+const recHours = r => { const d=r.datos||{}; const v=[d.horometroFin,d.horometroInicio,d.horometro,d.horasCelula].find(isNum); return isNum(v)?v:null; };
+function addMonths(iso,m){ const d=new Date(iso); d.setMonth(d.getMonth()+m); return d; }
+function vencState(p,k){
+  const s=(p.servicios||{})[k.key], it=k.it;
+  if(!s) return {cls:"none",rank:1,txt:"Falta cargar el último cambio",score:9};
+  let hR=null, dR=null;
+  if(it.horas>0 && isNum(s.horometro) && isNum(p.horometro)) hR=Math.round((s.horometro+it.horas-p.horometro)*10)/10;
+  if((it.meses>0||it.dias>0) && s.fecha){ const lim=new Date(addMonths(s.fecha,it.meses||0).getTime()+(it.dias||0)*864e5); dR=Math.ceil((lim-Date.now())/864e5); }
+  const total=(it.meses||0)*30+(it.dias||0), warnD=Math.min(15,Math.max(3,Math.round(total*0.25)));
+  const over=(hR!==null&&hR<0)||(dR!==null&&dR<0), warn=(hR!==null&&hR<10)||(dR!==null&&dR<=warnD);
+  const parts=[];
+  if(hR!==null) parts.push(hR<0?`vencido hace ${-hR} h`:`faltan ${hR} h`);
+  if(dR!==null) parts.push(dR<0?`vencido hace ${-dR} días`:`faltan ${dR} días`);
+  const score=Math.min(hR!==null?hR/it.horas:9, dR!==null&&total?dR/total:9);
+  return {cls:over?"over":warn?"warn":"ok",rank:over?4:warn?3:2,txt:parts.join(" / ")||"Sin horas cargadas",score,s};
+}
+function vencWorst(p){
+  const st=vencKeys(p).map(k=>({k,v:vencState(p,k)}));
+  return st.sort((a,b)=>b.v.rank-a.v.rank || a.v.score-b.v.score)[0];
+}
+function vencLine(p){
+  const w=vencWorst(p); if(!w) return "";
+  if(w.v.cls==="none") return `<div class="small v-none">Vencimientos sin cargar</div>`;
+  return `<div class="small v-${w.v.cls}"><span class="vdot"></span>${esc(w.k.label)}: ${esc(w.v.txt)}</div>`;
+}
+const V_LBL={ok:"Al día",warn:"Por vencer",over:"Vencido",none:"Sin dato"};
+function renderVenc(p){
+  const box=$("d-venc"), ks=vencKeys(p);
+  box.hidden=!S.role || !ks.length || S.sub!=="menu";
+  if(box.hidden) return;
+  const rows=ks.map(k=>({k,v:vencState(p,k)})).sort((a,b)=>b.v.rank-a.v.rank || a.v.score-b.v.score);
+  const iv=it=>[it.horas?`${it.horas} h`:"",it.meses?`${it.meses} ${it.meses===1?"mes":"meses"}`:"",it.dias?`${it.dias} días`:""].filter(Boolean).join(" o ");
+  box.innerHTML=`<div class="row" style="justify-content:space-between"><h2>Vencimientos</h2><span class="small muted mono">${isNum(p.horometro)?`Horómetro: ${p.horometro} h`:"Sin horómetro cargado"}</span></div>
+    <div class="tblwrap"><table class="venc"><tr><th>Fluido</th><th>Estado</th><th>Último cambio</th></tr>${rows.map(({k,v})=>`<tr>
+      <td><b>${esc(k.label)}</b><br><span class="small muted">Cada ${esc(iv(k.it))}</span></td>
+      <td class="v-${v.cls}"><span class="vdot"></span><b>${V_LBL[v.cls]}</b><br><span class="small">${esc(v.cls==="none"?v.txt:v.txt)}</span></td>
+      <td class="small">${v.s?`${esc(new Date(v.s.fecha).toLocaleDateString("es-AR"))}${isNum(v.s.horometro)?`<br><span class="mono">${v.s.horometro} h</span>`:""}`:"–"}</td></tr>`).join("")}</table></div>`;
+}
+function renderFluidChecks(p){
+  const box=$("mt-fluidos"), was=new Set([...box.querySelectorAll("input:checked")].map(i=>i.value));
+  const sig=JSON.stringify(vencKeys(p).map(k=>k.key+k.label));
+  if(box.dataset.sig===sig) return; box.dataset.sig=sig;
+  box.innerHTML=vencKeys(p).map(k=>`<label class="check"><input type="checkbox" value="${esc(k.key)}"${was.has(k.key)?" checked":""}> ${esc(k.label)}</label>`).join("");
+  $("mt-fl-wrap").hidden=!vencKeys(p).length;
+}
+// Recalcula horómetro actual y último cambio de cada fluido a partir de la bitácora
+async function calcServicios(id){
+  const p=S.planes.get(id); if(!p) return {};
+  const recs=(await S.db.collection(`aviones/${id}/registros`).orderBy("fecha","desc").limit(500).get()).docs.map(d=>d.data()).filter(d=>!d.eliminado).reverse();
+  let hob=isNum(p.horometroManual?.valor)?p.horometroManual.valor:null;
+  const serv={...(p.vencBase||{})};
+  recs.forEach(r=>{
+    const h=recHours(r); if(h!==null && (hob===null||h>hob)) hob=h;
+    (r.datos?.fluidos||[]).forEach(k=>{ if(!serv[k] || serv[k].fecha<=r.fecha) serv[k]={fecha:r.fecha,horometro:h!==null?h:hob}; });
+  });
+  return {horometro:hob,servicios:serv};
+}
+// Editor del administrador
+function fillVencEditor(p){
+  if(S.role!=="admin" || $("venc-box").contains(document.activeElement)) return;
+  const sig=JSON.stringify([p.vencimientos,p.vencBase,p.horometroManual,p.motores]);
+  if(S.vencSig===sig && S.vencFor===p.id) return; S.vencSig=sig; S.vencFor=p.id;
+  $("ve-hob").value=isNum(p.horometroManual?.valor)?p.horometroManual.valor:"";
+  drawVencEditor(p,vencItems(p).map(x=>({...x})),p.vencBase||{});
+}
+function drawVencEditor(p,items,base){
+  const E=engines(p);
+  const keysOf=it=>it.porMotor&&E.length>1?E.map(([e,l])=>[it.id+"|"+e,l]):[[it.porMotor?it.id+"|"+E[0][0]:it.id,""]];
+  $("ve-list").innerHTML=items.map((it,i)=>`<div class="ve-item" data-vi="${i}" data-id="${esc(it.id)}">
+    <div class="grid3">
+      <div class="field" style="grid-column:1/-1"><label>Fluido</label><input data-f="nombre" value="${esc(it.nombre)}"></div>
+      <div class="field"><label>Cada cuántas horas</label><input data-f="horas" inputmode="decimal" value="${isNum(it.horas)?it.horas:""}"></div>
+      <div class="field"><label>Cada cuántos meses</label><input data-f="meses" inputmode="decimal" value="${isNum(it.meses)?it.meses:""}"></div>
+      <div class="field"><label>Cada cuántos días</label><input data-f="dias" inputmode="decimal" value="${isNum(it.dias)?it.dias:""}"></div>
+    </div>
+    <div class="row"><label class="check"><input type="checkbox" data-f="porMotor"${it.porMotor?" checked":""}> Se controla por separado en cada motor</label>
+      <button type="button" class="ghost small" data-verm="${i}">Quitar</button></div>
+    ${keysOf(it).map(([k,l])=>`<div class="grid3" data-key="${esc(k)}"><div class="small muted" style="align-self:center">Último cambio${l?` (${esc(l.toLowerCase())})`:""} si no está en la bitácora</div>
+      <div class="field"><label>Fecha</label><input type="date" data-b="fecha" value="${base[k]?.fecha?esc(base[k].fecha.slice(0,10)):""}"></div>
+      <div class="field"><label>Horómetro</label><input data-b="horometro" inputmode="decimal" class="mono" value="${isNum(base[k]?.horometro)?base[k].horometro:""}"></div></div>`).join("")}
+  </div>`).join("");
+}
+function readVencEditor(){
+  const items=[], base={};
+  $("ve-list").querySelectorAll(".ve-item").forEach(el=>{
+    const g=f=>el.querySelector(`[data-f="${f}"]`);
+    const it={id:el.dataset.id,nombre:g("nombre").value.trim()||"Fluido",horas:num(g("horas").value),meses:num(g("meses").value),dias:num(g("dias").value),porMotor:g("porMotor").checked};
+    Object.keys(it).forEach(k=>{ if(it[k]===null) delete it[k]; });
+    items.push(it);
+    el.querySelectorAll("[data-key]").forEach(r=>{ const f=r.querySelector('[data-b="fecha"]').value, h=num(r.querySelector('[data-b="horometro"]').value);
+      if(f) base[r.dataset.key]={fecha:new Date(f+"T12:00:00").toISOString(),horometro:h}; });
+  });
+  return {items,base};
+}
+$("ve-list").addEventListener("change",e=>{ if(e.target.matches('[data-f="porMotor"]')){ const {items,base}=readVencEditor(); drawVencEditor(plane(),items,base); } });
+$("ve-list").addEventListener("click",e=>{ const b=e.target.closest("[data-verm]"); if(!b) return; const {items,base}=readVencEditor(); items.splice(+b.dataset.verm,1); drawVencEditor(plane(),items,base); });
+$("ve-add").addEventListener("click",()=>{ const {items,base}=readVencEditor(); items.push({id:"f"+Date.now().toString(36),nombre:"",horas:null,meses:12}); drawVencEditor(plane(),items,base); });
+$("ve-save").addEventListener("click",async()=>{
+  const {items,base}=readVencEditor(), id=S.current, h=num($("ve-hob").value);
+  if(items.some(it=>!(it.horas>0)&&!(it.meses>0)&&!(it.dias>0))) return msg("ve-msg","Cada fluido necesita horas, meses o días.","err");
+  try{
+    await S.db.doc("aviones/"+id).update({vencimientos:items,vencBase:base,horometroManual:h!==null?{valor:h,fecha:now()}:null});
+    S.planes.set(id,{...S.planes.get(id),vencimientos:items,vencBase:base,horometroManual:h!==null?{valor:h,fecha:now()}:null});
+    await refreshSummary(id);
+    S.vencSig=null; msg("ve-msg","Guardado.","ok");
+  }catch(err){ msg("ve-msg",writeErr(err),"err"); }
+});
 
 /* ---------- Manuales ---------- */
 function renderManuals(p){
@@ -1373,7 +1526,7 @@ function buildPdf(r,p){
   if(r.clase==="mant"){
     const hm=Object.entries(d.horasMotor||{}).filter(([,v])=>isNum(v)).map(([e,v])=>`${({izq:"izq.",der:"der.",m:""})[e]||e} ${v}`).join(", ");
     kv([["Tipo de trabajo",d.tipoTrabajo],["Sistema",d.sistema],["Referencia técnica",d.referencia],["Horas de célula",nv(d.horasCelula)],
-        ["Horas de motor",hm],["Prueba funcional",d.pruebaFuncional?"Sí":"No"],["Verificó",d.verifico],["Pendientes",d.pendientes]],"Trabajo");
+        ["Horas de motor",hm],["Prueba funcional",d.pruebaFuncional?"Sí":"No"],["Verificó",d.verifico],["Pendientes",d.pendientes],["Fluidos cambiados",fluidNames(p,d.fluidos)||"-"],["",""]],"Trabajo");
     if(d.motivo){ doc.autoTable({...base,startY:y,head:[["Motivo o discrepancia encontrada"]],body:[[pdfTxt(d.motivo)]]}); y=doc.lastAutoTable.finalY+3.5; }
     if(d.repuestos?.length){ doc.autoTable({...base,startY:y,head:[["N.º de parte","Descripción","N.º de serie","Cant.","Certificado"]],
       body:d.repuestos.map(x=>[x.np,x.desc,x.ns,x.cant,x.cert].map(v=>pdfTxt(v||"-")))}); y=doc.lastAutoTable.finalY+3.5; }
@@ -1442,6 +1595,7 @@ function showSub(sub){
   if(S.fixing) endFix();
   document.querySelectorAll("[data-sub]").forEach(el=>el.hidden=el.dataset.sub!==sub);
   $("d-menu").hidden = sub!=="menu";
+  if(plane()) renderVenc(plane());
   $("sub-back").hidden = sub==="menu";
   if(sub==="registro"){
     if($("saved-box").hidden){ $("kind-pick").hidden=false; $("entry-form").hidden=true; }

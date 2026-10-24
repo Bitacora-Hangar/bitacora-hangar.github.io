@@ -19,7 +19,7 @@ service cloud.firestore {
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
         || (isProf() && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['estado', 'avisosAbiertos', 'ultimo', 'manuales']));
+              .hasOnly(['estado', 'avisosAbiertos', 'ultimo', 'manuales', 'horometro', 'servicios']));
 
       // Registros: solo profesores aprobados y el administrador
       match /registros/{registro} {

@@ -297,6 +297,8 @@ details>summary{cursor:pointer;font-weight:600}
         <!-- Planilla de puesta en marcha -->
         <div id="sheet-pm" class="sheet">
           <div class="grid3">
+            <div class="field" id="pm-lado-wrap"><label for="pm-lado">Motor probado</label>
+              <select id="pm-lado"><option value="ambos">Ambos</option><option value="izq">Izquierdo</option><option value="der">Derecho</option></select></div>
             <div class="field"><label for="pm-motivo">Motivo</label>
               <select id="pm-motivo"><option>Rutina</option><option>Después de mantenimiento</option><option>Instrucción</option><option>Otro</option></select></div>
             <div class="field"><label for="pm-trabajo">Trabajo relacionado</label><input id="pm-trabajo" placeholder="Si es después de un mantenimiento"></div>
@@ -335,10 +337,12 @@ details>summary{cursor:pointer;font-weight:600}
           <div class="grid3">
             <div class="field"><label for="mt-tipo">Tipo de trabajo</label>
               <select id="mt-tipo">
-                <option>Preventivo</option><option>Correctivo / reparación</option>
+                <option>Preventivo</option><option>Correctivo / reparación</option><option>Restaurativo (reacondicionamiento)</option>
                 <option>Inspección 25/50 h</option><option>Inspección 100 h</option><option>Inspección anual (habilitación)</option>
                 <option>Directiva de aeronavegabilidad (AD)</option><option>Boletín de servicio (SB)</option><option>Alteración</option><option>Otro</option>
               </select></div>
+            <div class="field" id="mt-lado-wrap"><label for="mt-lado">Dónde se trabajó</label>
+              <select id="mt-lado"><option value="ambos">Ambos motores</option><option value="izq">Motor izquierdo</option><option value="der">Motor derecho</option><option value="celula">Célula / no aplica</option></select></div>
             <div class="field"><label for="mt-sis">Sistema</label>
               <select id="mt-sis"></select></div>
             <div class="field"><label for="mt-ref">Referencia técnica</label><input id="mt-ref" list="ref-list" placeholder="Manual, sección, página, AD o SB"></div>
@@ -369,9 +373,11 @@ details>summary{cursor:pointer;font-weight:600}
             <div class="field"><label for="cb-tipo">Combustible *</label>
               <select id="cb-tipo"><option>100LL</option><option>UL91</option><option>Nafta de auto</option><option>Otro</option></select></div>
             <div class="field" id="cb-otro-wrap" hidden><label for="cb-otro">¿Cuál?</label><input id="cb-otro"></div>
-            <div class="field"><label for="cb-lt">Litros cargados *</label><input id="cb-lt" inputmode="decimal" class="mono"></div>
-            <div class="field"><label for="cb-izq">Tanque izq. (L)</label><input id="cb-izq" inputmode="decimal" class="mono" placeholder="Opcional"></div>
-            <div class="field"><label for="cb-der">Tanque der. (L)</label><input id="cb-der" inputmode="decimal" class="mono" placeholder="Opcional"></div>
+            <div class="field"><label for="cb-lado">Tanques cargados</label>
+              <select id="cb-lado"><option value="ambos">Ambos</option><option value="izq">Izquierdo</option><option value="der">Derecho</option></select></div>
+            <div class="field" id="cb-izq-wrap"><label for="cb-izq">Tanque izq. (L)</label><input id="cb-izq" inputmode="decimal" class="mono"></div>
+            <div class="field" id="cb-der-wrap"><label for="cb-der">Tanque der. (L)</label><input id="cb-der" inputmode="decimal" class="mono"></div>
+            <div class="field"><label for="cb-lt">Litros cargados (total) *</label><input id="cb-lt" inputmode="decimal" class="mono" placeholder="Se suma solo"></div>
             <div class="field"><label for="cb-hob">Horómetro</label><input id="cb-hob" inputmode="decimal" class="mono"></div>
             <div class="field"><label for="cb-orig">Origen</label>
               <select id="cb-orig"><option>Surtidor</option><option>Tambor</option><option>Estación de servicio</option><option>Proveedor</option><option>Otro</option></select></div>
@@ -831,7 +837,9 @@ function fillForm(r,p){
   const d=r.datos||{};
   const set=(id,v)=>{ const i=$(id); if(!i) return; if(i.type==="checkbox") i.checked=!!v; else i.value=(v===null||v===undefined)?"":v; };
   set("e-state",r.estado||"ok"); set("e-text",r.texto);
+  set("pm-lado","ambos"); set("mt-lado","ambos"); set("cb-lado","ambos");
   if(r.clase==="pm"){
+    set("pm-lado",d.lado||"ambos");
     [["pm-motivo",d.motivo],["pm-trabajo",d.trabajo],["pm-sup",d.supervisa],["pm-hi",d.horaInicio],["pm-hf",d.horaFin],["pm-oat",d.oat],
      ["pm-hob1",d.horometroInicio],["pm-hob2",d.horometroFin],["pm-fuel",d.combustible],["pm-vac",d.vacio],["pm-c-fugas",d.sinFugas]].forEach(([i,v])=>set(i,v));
     SAFETY.forEach(([k])=>set("pm-c-"+k,d.seguridad?.[k]));
@@ -841,6 +849,7 @@ function fillForm(r,p){
     [["mt-tipo",d.tipoTrabajo],["mt-sis",d.sistema],["mt-ref",d.referencia],["mt-motivo",d.motivo],["mt-hc",d.horasCelula],
      ["mt-ver",d.verifico],["mt-prueba",d.pruebaFuncional],["mt-pend",d.pendientes]].forEach(([i,v])=>set(i,v));
     document.querySelectorAll("#mt-fluidos input").forEach(i=>i.checked=(d.fluidos||[]).includes(i.value));
+    set("mt-lado",d.lado||"ambos");
     Object.entries(d.horasMotor||{}).forEach(([e,v])=>set("mt-hm-"+e,v));
     (d.repuestos||[]).forEach(x=>{ const row=partRow(); row.querySelectorAll("input").forEach(i=>i.value=x[i.dataset.f]||""); $("mt-parts").appendChild(row); });
   } else if(r.clase==="comb"){
@@ -850,7 +859,9 @@ function fillForm(r,p){
     [["cb-lt",d.litros],["cb-izq",d.tanqueIzq],["cb-der",d.tanqueDer],["cb-tope",d.aTope],["cb-hob",d.horometro],["cb-orig",d.origen],
      ["cb-lote",d.lote],["cb-ver",d.verifico],["cb-costo",d.costo],["cb-muestra",d.muestra]].forEach(([i,v])=>set(i,v));
     CB_CHECKS.forEach(([c])=>set("cb-c-"+c,d.controles?.[c]));
+    set("cb-lado",d.lado||(isNum(d.tanqueIzq)&&!isNum(d.tanqueDer)?"izq":isNum(d.tanqueDer)&&!isNum(d.tanqueIzq)?"der":"ambos"));
   }
+  applyLado();
 }
 
 /* ---------- Navegación ---------- */
@@ -955,23 +966,45 @@ function buildSheets(p){
   // Conservar lo ya escrito si se reconstruye por un cambio de límites
   const keep={}; document.querySelectorAll("#pm-table input").forEach(i=>keep[i.id]=i.type==="checkbox"?i.checked:i.value);
   const E=engines(p);
-  $("pm-table").innerHTML=`<thead><tr><th>Parámetro</th>${E.map(([,l])=>`<th>${l}</th>`).join("")}<th>Límite</th></tr></thead><tbody>`+
+  $("pm-table").innerHTML=`<thead><tr><th>Parámetro</th>${E.map(([e,l])=>`<th data-e="${e}">${l}</th>`).join("")}<th>Límite</th></tr></thead><tbody>`+
     PM.map(r=>`<tr><td>${r.l}</td>${E.map(([e])=>{
       const id=`pm-${e}-${r.k}`;
-      if(r.t==="c") return `<td><input type="checkbox" id="${id}" aria-label="${esc(r.l)}"></td>`;
-      if(r.t==="calc") return `<td class="calc" id="${id}">–</td>`;
-      return `<td><input type="text" inputmode="decimal" id="${id}" data-row="${r.k}" aria-label="${esc(r.l)}"></td>`;
+      if(r.t==="c") return `<td data-e="${e}"><input type="checkbox" id="${id}" aria-label="${esc(r.l)}"></td>`;
+      if(r.t==="calc") return `<td class="calc" data-e="${e}" id="${id}">–</td>`;
+      return `<td data-e="${e}"><input type="text" inputmode="decimal" id="${id}" data-row="${r.k}" aria-label="${esc(r.l)}"></td>`;
     }).join("")}<td class="lim">${esc(limText(p,r))}</td></tr>`).join("")+`</tbody>`;
   Object.entries(keep).forEach(([id,v])=>{ const i=$(id); if(i){ if(i.type==="checkbox") i.checked=v; else i.value=v; } });
   const lv=limText(p,{min:"vacioMin",max:"vacioMax"});
   $("pm-vac").placeholder = lv?`Límite ${lv}`:"";
   $("pm-limsrc").textContent = p.limitesFuente ? "Límites cargados de: "+p.limitesFuente : "Este avión no tiene límites cargados. Los carga el administrador en “Datos y límites”.";
-  $("mt-hm-wrap").innerHTML = E.map(([e,l])=>`<label for="mt-hm-${e}">Horas ${l.toLowerCase()}</label><input id="mt-hm-${e}" inputmode="decimal" class="mono">`).join("");
+  $("mt-hm-wrap").innerHTML = E.map(([e,l])=>`<div data-e="${e}"><label for="mt-hm-${e}">Horas ${l.toLowerCase()}</label><input id="mt-hm-${e}" inputmode="decimal" class="mono"></div>`).join("");
   $("ref-list").innerHTML = (p.manuales||[]).map(m=>`<option value="${esc((m.grupo?m.grupo+", ":"")+m.titulo)}">`).join("");
+  applyLado();
+}
+// Motor o lado elegido en cada planilla (en monomotores siempre el único motor)
+const LADO={izq:"Izquierdo",der:"Derecho",ambos:"Ambos"};
+const LUGAR={izq:"Motor izquierdo",der:"Motor derecho",ambos:"Ambos motores",celula:"Célula / no aplica"};
+function selEngines(p,sel){ const E=engines(p); if(E.length<2) return E; const v=$(sel).value; return v==="ambos"?E:E.filter(([e])=>e===v); }
+function applyLado(){
+  const p=plane(); if(!p) return;
+  const two=engines(p).length>1;
+  $("pm-lado-wrap").hidden=!two; $("mt-lado-wrap").hidden=!two;
+  const pe=selEngines(p,"pm-lado").map(([e])=>e), me=selEngines(p,"mt-lado").map(([e])=>e);
+  document.querySelectorAll("#pm-table [data-e]").forEach(c=>c.hidden=!pe.includes(c.dataset.e));
+  document.querySelectorAll("#mt-hm-wrap [data-e]").forEach(c=>c.hidden=!me.includes(c.dataset.e));
+  $("mt-hm-wrap").hidden=!me.length;
+  const cl=$("cb-lado").value;
+  $("cb-izq-wrap").hidden=cl==="der"; $("cb-der-wrap").hidden=cl==="izq";
   checkPm();
 }
+function sumTanks(){
+  const cl=$("cb-lado").value, v=[cl!=="der"&&num($("cb-izq").value),cl!=="izq"&&num($("cb-der").value)].filter(isNum);
+  if(v.length) $("cb-lt").value=Math.round(v.reduce((a,b)=>a+b,0)*10)/10;
+}
+["pm-lado","mt-lado","cb-lado"].forEach(id=>$(id).addEventListener("change",()=>{ applyLado(); if(id==="cb-lado") sumTanks(); }));
+["cb-izq","cb-der"].forEach(id=>$(id).addEventListener("input",sumTanks));
 function readPm(p){
-  const E=engines(p), motores={}, fuera=[];
+  const E=selEngines(p,"pm-lado"), motores={}, fuera=[];
   E.forEach(([e,el])=>{
     const o={};
     PM.forEach(r=>{
@@ -993,6 +1026,7 @@ function checkPm(){
   engines(p).forEach(([e])=>{
     PM.forEach(r=>{
       const el=$(`pm-${e}-${r.k}`); if(!el) return;
+      if(!motores[e]){ el.classList.remove("out"); return; }
       const bad=outOf(p,r,motores[e][r.k]);
       if(r.t==="calc"){ el.textContent=isNum(motores[e].dif)?motores[e].dif:"–"; el.classList.toggle("out",bad); }
       else if(r.t==="n") el.classList.toggle("out",bad);
@@ -1033,8 +1067,9 @@ function resetEntryForm(){
   $("entry-form").querySelectorAll("input[type=checkbox]").forEach(i=>i.checked=false);
   $("e-state").value="ok"; $("mt-parts").innerHTML=""; $("pm-out").hidden=true;
   document.querySelectorAll("#entry-form input.out").forEach(i=>i.classList.remove("out"));
+  ["pm-lado","mt-lado","cb-lado"].forEach(id=>$(id).value="ambos");
   setKind(S.kind||"pm");
-  if(plane()) checkPm();
+  if(plane()) applyLado();
 }
 
 $("entry-form").addEventListener("submit",async e=>{
@@ -1055,7 +1090,7 @@ $("entry-form").addEventListener("submit",async e=>{
       horaInicio:$("pm-hi").value,horaFin:$("pm-hf").value,oat:num($("pm-oat").value),
       horometroInicio:num($("pm-hob1").value),horometroFin:num($("pm-hob2").value),combustible:$("pm-fuel").value.trim(),
       seguridad:Object.fromEntries(SAFETY.map(([s])=>[s,$("pm-c-"+s).checked])),sinFugas:$("pm-c-fugas").checked,
-      motores:r.motores,vacio:r.vac,fuera:r.fuera};
+      motores:r.motores,vacio:r.vac,fuera:r.fuera,lado:engines(p).length>1?$("pm-lado").value:""};
     horas = isNum(datos.horometroFin)?String(datos.horometroFin):"";
     if(r.fuera.length && estado==="ok"){
       if($("e-msg").dataset.warned!=="1"){ $("e-msg").dataset.warned="1"; return msg("e-msg","Hay valores fuera de límite y el avión quedó como “Todo en orden”. Si es correcto, tocá Guardar de nuevo.","err"); }
@@ -1063,14 +1098,14 @@ $("entry-form").addEventListener("submit",async e=>{
   } else if(k==="mant"){
     const parts=[...$("mt-parts").querySelectorAll(".part")].map(row=>Object.fromEntries([...row.querySelectorAll("input")].map(i=>[i.dataset.f,i.value.trim()]))).filter(x=>Object.values(x).some(Boolean));
     datos={tipoTrabajo:$("mt-tipo").value,sistema:$("mt-sis").value,referencia:$("mt-ref").value.trim(),motivo:$("mt-motivo").value.trim(),
-      horasCelula:num($("mt-hc").value),horasMotor:Object.fromEntries(engines(p).map(([e])=>[e,num($("mt-hm-"+e)?.value)])),
+      horasCelula:num($("mt-hc").value),horasMotor:Object.fromEntries(selEngines(p,"mt-lado").map(([e])=>[e,num($("mt-hm-"+e)?.value)])),lado:engines(p).length>1?$("mt-lado").value:"",
       verifico:$("mt-ver").value.trim(),pruebaFuncional:$("mt-prueba").checked,pendientes:$("mt-pend").value.trim(),repuestos:parts,
       fluidos:[...document.querySelectorAll("#mt-fluidos input:checked")].map(i=>i.value)};
     tipo=datos.tipoTrabajo;
     horas = isNum(datos.horasCelula)?String(datos.horasCelula):"";
   } else if(k==="comb"){
     const t=$("cb-tipo").value;
-    datos={combustible:t==="Otro"?($("cb-otro").value.trim()||"Otro"):t,litros:num($("cb-lt").value),tanqueIzq:num($("cb-izq").value),tanqueDer:num($("cb-der").value),
+    datos={combustible:t==="Otro"?($("cb-otro").value.trim()||"Otro"):t,litros:num($("cb-lt").value),lado:$("cb-lado").value,tanqueIzq:$("cb-lado").value==="der"?null:num($("cb-izq").value),tanqueDer:$("cb-lado").value==="izq"?null:num($("cb-der").value),
       aTope:$("cb-tope").checked,horometro:num($("cb-hob").value),origen:$("cb-orig").value,lote:$("cb-lote").value.trim(),
       verifico:$("cb-ver").value.trim(),costo:$("cb-costo").value.trim(),muestra:$("cb-muestra").value.trim(),
       controles:Object.fromEntries(CB_CHECKS.map(([c])=>[c,$("cb-c-"+c).checked]))};
@@ -1164,7 +1199,7 @@ function renderLog(){
 function details(r,p){
   const d=r.datos||{};
   if(r.clase==="pm"){
-    const kv=[["Motivo",d.motivo+(d.trabajo?` (${d.trabajo})`:"")],["Horario",[d.horaInicio,d.horaFin].filter(Boolean).join("–")],
+    const kv=[["Motor probado",LADO[d.lado]||""],["Motivo",d.motivo+(d.trabajo?` (${d.trabajo})`:"")],["Horario",[d.horaInicio,d.horaFin].filter(Boolean).join("–")],
       ["Horómetro",[d.horometroInicio,d.horometroFin].filter(isNum).join(" → ")],["OAT",isNum(d.oat)?d.oat+" °C":""],["Combustible",d.combustible],["Succión",isNum(d.vacio)?d.vacio+" inHg":""]]
       .filter(([,v])=>v);
     const E=Object.keys(d.motores||{}); const names={izq:"Izq.",der:"Der.",m:"Motor"};
@@ -1178,7 +1213,7 @@ function details(r,p){
   }
   if(r.clase==="mant"){
     const hm=Object.entries(d.horasMotor||{}).filter(([,v])=>isNum(v)).map(([e,v])=>`${({izq:"izq.",der:"der.",m:""})[e]||e} ${v}`).join(", ");
-    const kv=[["Sistema",d.sistema],["Referencia",d.referencia],["Motivo",d.motivo],["Horas motor",hm],["Prueba funcional",d.pruebaFuncional?"Sí":""],["Pendientes",d.pendientes],["Fluidos cambiados",fluidNames(p,d.fluidos)]].filter(([,v])=>v);
+    const kv=[["Dónde se trabajó",LUGAR[d.lado]||""],["Sistema",d.sistema],["Referencia",d.referencia],["Motivo",d.motivo],["Horas motor",hm],["Prueba funcional",d.pruebaFuncional?"Sí":""],["Pendientes",d.pendientes],["Fluidos cambiados",fluidNames(p,d.fluidos)]].filter(([,v])=>v);
     const parts=(d.repuestos||[]).map(x=>[x.cant&&x.cant+"×",x.np,x.desc,x.ns&&"S/N "+x.ns,x.cert&&"cert. "+x.cert].filter(Boolean).join(" "));
     return `<div class="kv">${kv.map(([k,v])=>`<span><b>${k}:</b> ${esc(v)}</span>`).join("")}</div>
       ${parts.length?`<div class="small"><b>Repuestos:</b> ${parts.map(esc).join(" · ")}</div>`:""}`;
@@ -1186,7 +1221,7 @@ function details(r,p){
   if(r.clase==="comb"){
     const tanks=[isNum(d.tanqueIzq)&&`izq. ${d.tanqueIzq} L`,isNum(d.tanqueDer)&&`der. ${d.tanqueDer} L`].filter(Boolean).join(", ");
     const cons=consumo(r);
-    const kv=[["Combustible",d.combustible],["Litros",isNum(d.litros)?d.litros+" L":""],["Tanques",tanks],["A tope",d.aTope?"Sí":""],["Origen",[d.origen,d.lote].filter(Boolean).join(" · ")],
+    const kv=[["Combustible",d.combustible],["Litros",isNum(d.litros)?d.litros+" L":""],["Tanques",[LADO[d.lado],tanks].filter(Boolean).join(": ")],["A tope",d.aTope?"Sí":""],["Origen",[d.origen,d.lote].filter(Boolean).join(" · ")],
       ["Muestra",d.muestra],["Verificó",d.verifico],["Costo",d.costo],["Consumo",cons?cons+" L/h desde la carga a tope anterior":""]].filter(([,v])=>v);
     const falt=CB_CHECKS.filter(([c])=>d.controles&&!d.controles[c]).map(([,l])=>l);
     return `<div class="kv">${kv.map(([k,v])=>`<span><b>${k}:</b> ${esc(v)}</span>`).join("")}</div>${falt.length?`<div class="small muted">Sin tildar: ${esc(falt.join(", "))}</div>`:""}`;
@@ -1519,7 +1554,7 @@ function buildPdf(r,p){
       ...(r.aprobadoPor?[["Cargó (alumno)",r.alumno||r.autor],["Aprobó (profesor)",r.aprobado?`${r.aprobadoPor} · ${fmt(r.aprobado)}`:r.aprobadoPor]]:[["Profesor",r.autor]]),["Estado final",r.clase==="comb"?"No cambia (solo registro)":(r.abierto?EST[r.estado]?.label:(r.seguimiento?.length?"Resuelto":EST[r.estado]?.label))||"-"]]);
   const d=r.datos||{};
   if(r.clase==="pm"){
-    kv([["Motivo",d.motivo],["Trabajo relacionado",d.trabajo],["Supervisó",d.supervisa],["Arranque / corte",[d.horaInicio,d.horaFin].filter(Boolean).join(" / ")],
+    kv([...(d.lado?[["Motor probado",LADO[d.lado]],["",""]]:[]),["Motivo",d.motivo],["Trabajo relacionado",d.trabajo],["Supervisó",d.supervisa],["Arranque / corte",[d.horaInicio,d.horaFin].filter(Boolean).join(" / ")],
         ["Horómetro inicio",nv(d.horometroInicio)],["Horómetro final",nv(d.horometroFin)],["Temp. exterior",isNum(d.oat)?d.oat+" °C":"-"],["Combustible",d.combustible]],"Datos de la prueba");
     kv([...SAFETY.map(([k,l])=>[l,yn(d.seguridad?.[k])]),["Sin fugas tras el corte",yn(d.sinFugas)]],"Seguridad");
     const E=Object.keys(d.motores||{}); const names={izq:"Motor izq.",der:"Motor der.",m:"Motor"};
@@ -1534,14 +1569,14 @@ function buildPdf(r,p){
   if(r.clase==="mant"){
     const hm=Object.entries(d.horasMotor||{}).filter(([,v])=>isNum(v)).map(([e,v])=>`${({izq:"izq.",der:"der.",m:""})[e]||e} ${v}`).join(", ");
     kv([["Tipo de trabajo",d.tipoTrabajo],["Sistema",d.sistema],["Referencia técnica",d.referencia],["Horas de célula",nv(d.horasCelula)],
-        ["Horas de motor",hm],["Prueba funcional",d.pruebaFuncional?"Sí":"No"],["Verificó",d.verifico],["Pendientes",d.pendientes],["Fluidos cambiados",fluidNames(p,d.fluidos)||"-"],["",""]],"Trabajo");
+        ["Horas de motor",hm],["Prueba funcional",d.pruebaFuncional?"Sí":"No"],["Verificó",d.verifico],["Pendientes",d.pendientes],["Fluidos cambiados",fluidNames(p,d.fluidos)||"-"],["Dónde se trabajó",LUGAR[d.lado]||"-"]],"Trabajo");
     if(d.motivo){ doc.autoTable({...base,startY:y,head:[["Motivo o discrepancia encontrada"]],body:[[pdfTxt(d.motivo)]]}); y=doc.lastAutoTable.finalY+3.5; }
     if(d.repuestos?.length){ doc.autoTable({...base,startY:y,head:[["N.º de parte","Descripción","N.º de serie","Cant.","Certificado"]],
       body:d.repuestos.map(x=>[x.np,x.desc,x.ns,x.cant,x.cert].map(v=>pdfTxt(v||"-")))}); y=doc.lastAutoTable.finalY+3.5; }
   }
   if(r.clase==="comb"){
     kv([["Combustible",d.combustible],["Litros cargados",nv(d.litros)],["Tanque izq. (L)",nv(d.tanqueIzq)],["Tanque der. (L)",nv(d.tanqueDer)],
-        ["A tope",d.aTope?"Sí":"No"],["Horómetro",nv(d.horometro)],["Origen",d.origen],["Lote o remito",d.lote],["Muestra de drenaje",d.muestra],["Verificó",d.verifico],["Costo",d.costo],["",""]],"Carga");
+        ["A tope",d.aTope?"Sí":"No"],["Horómetro",nv(d.horometro)],["Origen",d.origen],["Lote o remito",d.lote],["Muestra de drenaje",d.muestra],["Verificó",d.verifico],["Costo",d.costo],["Tanques cargados",LADO[d.lado]||"-"]],"Carga");
     kv(CB_CHECKS.map(([c,l])=>[l,yn(d.controles?.[c])]),"Controles");
   }
   const textHead = (r.clase==="pm"||r.clase==="comb")?"Observaciones":r.clase==="mant"?"Trabajo realizado / acción correctiva":"Qué se encontró";

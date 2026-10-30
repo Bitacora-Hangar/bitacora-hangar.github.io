@@ -728,10 +728,9 @@ const LISTADO=[
   {matricula:"C-010",modelo:"Gloster Meteor F.4",motores:2},
   {matricula:"E-011",modelo:"Beechcraft T-34 Mentor",motores:1},
   {matricula:"T-133",modelo:"Aero Commander 500U",motores:2},
-  {matricula:"T-142",modelo:"Aero Commander 500U Shrike",motores:2},
   {matricula:"T-143",modelo:"Aero Commander 500U Shrike Commander",motores:2},
   {matricula:"LC-1",modelo:"Bacota LC-1",motores:1,notas:"Sin matrícula en el listado"},
-  {matricula:"H-19",modelo:"Sikorsky S-55 (H-19 Chickasaw)",motores:1,notas:"Sin matrícula en el listado"},
+  {matricula:"H-08",modelo:"Sikorsky S-55 Chickasaw",motores:1},
   {matricula:"E-225",modelo:"Morane-Saulnier MS-760",motores:2}];
 const normMat=m=>(m||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
 function listMissing(){ const have=new Set([...S.planes.values()].map(p=>normMat(p.matricula))); return LISTADO.filter(a=>!have.has(normMat(a.matricula))); }
@@ -1312,7 +1311,7 @@ async function refreshSummary(id){
 
 /* ---------- Imagen de cada avión en la lista ---------- */
 // Imagen por matrícula (sin guiones ni espacios), así sigue andando si se corrige la matrícula
-const PLANE_IMG = {"T143":"img/t-143.png","T133":"img/t-133.png","C010":"img/c-010.png","E011":"img/e-011.png"};
+const PLANE_IMG = {"T143":"img/t-143.png","T133":"img/t-133.png","C010":"img/c-010.png","E011":"img/e-011.png","H08":"img/h-08.png"};
 const planeImg = p => { const src=PLANE_IMG[(p.matricula||"").toUpperCase().replace(/[^A-Z0-9]/g,"")];
   return src ? `<img class="plane-img" src="${src}" alt="${esc(p.modelo||"")} ${esc(p.matricula)}" loading="lazy">` : ""; };
 

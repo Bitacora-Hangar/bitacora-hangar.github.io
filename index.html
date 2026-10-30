@@ -236,6 +236,7 @@ details>summary{cursor:pointer;font-weight:600}
       <div id="sent-list" class="stack"></div>
     </div>
     <div id="fleet" class="fleet"><div class="empty">Cargando aviones…</div></div>
+    <div id="list-box" class="note admin-only" hidden><span id="list-txt"></span> <button type="button" id="list-btn">Agregarlos</button> <span id="list-msg" class="msg"></span></div>
     <details id="add-box" class="panel admin-only">
       <summary>Agregar avión</summary>
       <form id="add-form" class="grid2">
@@ -722,6 +723,36 @@ $("seed-btn").addEventListener("click",async()=>{
   }catch(_){ msg("seed-msg","No se pudo cargar.","err"); b.disabled=false; }
 });
 
+// Listado de aeronaves del taller: el administrador agrega de una vez las que todavía no están cargadas
+const LISTADO=[
+  {matricula:"C-010",modelo:"Gloster Meteor F.4",motores:2},
+  {matricula:"E-011",modelo:"Beechcraft T-34 Mentor",motores:1},
+  {matricula:"T-133",modelo:"Aero Commander 500U",motores:2},
+  {matricula:"T-142",modelo:"Aero Commander 500U Shrike",motores:2},
+  {matricula:"T-143",modelo:"Aero Commander 500U Shrike Commander",motores:2},
+  {matricula:"LC-1",modelo:"Bacota LC-1",motores:1,notas:"Sin matrícula en el listado"},
+  {matricula:"H-19",modelo:"Sikorsky S-55 (H-19 Chickasaw)",motores:1,notas:"Sin matrícula en el listado"},
+  {matricula:"E-225",modelo:"Morane-Saulnier MS-760",motores:2}];
+const normMat=m=>(m||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+function listMissing(){ const have=new Set([...S.planes.values()].map(p=>normMat(p.matricula))); return LISTADO.filter(a=>!have.has(normMat(a.matricula))); }
+function renderListBox(){
+  const miss=S.loaded&&S.db ? listMissing() : [];
+  $("list-box").hidden=!miss.length;
+  $("list-txt").textContent=miss.length ? `Faltan cargar ${miss.length} aviones del listado del taller: ${miss.map(a=>a.matricula).join(", ")}.` : "";
+}
+$("list-btn").addEventListener("click",async()=>{
+  const b=$("list-btn"); b.disabled=true; msg("list-msg","Agregando…");
+  try{
+    for(const a of listMissing()){
+      let id=slug(a.matricula); if(S.planes.has(id)) id+="-"+Date.now().toString(36);
+      await S.db.doc("aviones/"+id).set({matricula:a.matricula,modelo:a.modelo,notas:a.notas||"",motores:a.motores,motorModelo:"",limites:{},limitesFuente:"",
+        estado:"ok",avisosAbiertos:0,manuales:[],creado:now(),ultimo:null});
+    }
+    msg("list-msg","Listo.","ok");
+  }catch(err){ msg("list-msg",writeErr(err),"err"); }
+  b.disabled=false;
+});
+
 $("mt-sis").innerHTML = SISTEMAS.map(s=>`<option>${s}</option>`).join("");
 
 /* ---------- Registros de alumnos ---------- */
@@ -902,7 +933,7 @@ function openDetail(id){
 $("search").addEventListener("input",renderFleet);
 function sortedPlanes(){ return [...S.planes.values()].sort((a,b)=>(EST[b.estado]?.rank||0)-(EST[a.estado]?.rank||0) || a.matricula.localeCompare(b.matricula)); }
 function renderFleet(){
-  const box=$("fleet");
+  const box=$("fleet"); renderListBox();
   if(!S.db){ box.innerHTML=`<div class="empty">${S.loaded?"No hay conexión con la bitácora compartida.":"Cargando aviones…"}</div>`; return; }
   if(!S.loaded){ box.innerHTML=`<div class="empty">Cargando aviones…</div>`; return; }
   const q=$("search").value.trim().toLowerCase();

@@ -481,6 +481,7 @@ details>summary{cursor:pointer;font-weight:600}
         <h2>Datos y límites</h2>
         <form id="edit-form" class="stack" style="gap:12px">
           <div class="grid3">
+            <div class="field"><label for="ed-mat">Matrícula (nombre del avión)</label><input id="ed-mat" class="mono" autocapitalize="characters"></div>
             <div class="field"><label for="ed-model">Modelo</label><input id="ed-model"></div>
             <div class="field"><label for="ed-motor">Motor</label><input id="ed-motor" placeholder="Ej.: Lycoming IO-540"></div>
             <div class="field"><label for="ed-eng">Motores</label><select id="ed-eng"><option value="1">1 motor</option><option value="2">2 motores</option></select></div>
@@ -931,9 +932,12 @@ $("add-form").addEventListener("submit",async e=>{
   e.preventDefault();
   if(!S.db) return msg("add-msg","Sin conexión con la bitácora.","err");
   const reg=$("add-reg").value.trim().toUpperCase();
-  const id=slug(reg);
+  let id=slug(reg);
   if(id.length<4) return msg("add-msg","Escribí una matrícula válida.","err");
-  if(S.planes.has(id)) return msg("add-msg",S.planes.get(id).eliminado?"Ese avión está en Eliminados: restauralo desde ahí.":"Ese avión ya está cargado.","err");
+  const same=[...S.planes.values()].find(x=>(x.matricula||"").toUpperCase()===reg);
+  if(same) return msg("add-msg",same.eliminado?"Ese avión está en Eliminados: restauralo desde ahí.":"Ese avión ya está cargado.","err");
+  // Si el código quedó ocupado por un avión al que se le cambió la matrícula, se usa otro
+  if(S.planes.has(id)) id+="-"+Date.now().toString(36);
   try{
     await S.db.doc("aviones/"+id).set({matricula:reg,modelo:$("add-model").value.trim(),notas:$("add-notes").value.trim(),
       motores:+$("add-eng").value,motorModelo:"",limites:{},limitesFuente:"",
@@ -1508,15 +1512,20 @@ $("d-qr").addEventListener("click",async e=>{
 $("ed-lims").innerHTML = LIMS.map(([k,l])=>`<div class="field"><label for="lim-${k}">${l}</label><input id="lim-${k}" inputmode="decimal" class="mono"></div>`).join("");
 function fillEdit(p){
   if($("edit-box").contains(document.activeElement)) return;
-  $("ed-model").value=p.modelo||""; $("ed-notes").value=p.notas||""; $("ed-motor").value=p.motorModelo||"";
+  $("ed-mat").value=p.matricula||""; $("ed-model").value=p.modelo||""; $("ed-notes").value=p.notas||""; $("ed-motor").value=p.motorModelo||"";
   $("ed-eng").value=String(+p.motores===2?2:1); $("ed-limsrc").value=p.limitesFuente||"";
   LIMS.forEach(([k])=>$("lim-"+k).value=isNum(p.limites?.[k])?p.limites[k]:"");
 }
 $("edit-form").addEventListener("submit",async e=>{
   e.preventDefault();
   const limites={}; LIMS.forEach(([k])=>{ const v=num($("lim-"+k).value); if(v!==null) limites[k]=v; });
+  // La matrícula se puede corregir; el avión conserva su código interno, así el QR impreso sigue funcionando
+  const mat=$("ed-mat").value.trim().toUpperCase();
+  if(slug(mat).length<4) return msg("ed-msg","Escribí una matrícula válida.","err");
+  const dup=[...S.planes.values()].find(x=>x.id!==S.current && (x.matricula||"").toUpperCase()===mat);
+  if(dup) return msg("ed-msg",dup.eliminado?"Esa matrícula está en Eliminados.":"Ya hay otro avión con esa matrícula.","err");
   try{
-    await S.db.doc("aviones/"+S.current).update({modelo:$("ed-model").value.trim(),notas:$("ed-notes").value.trim(),motorModelo:$("ed-motor").value.trim(),
+    await S.db.doc("aviones/"+S.current).update({matricula:mat,modelo:$("ed-model").value.trim(),notas:$("ed-notes").value.trim(),motorModelo:$("ed-motor").value.trim(),
       motores:+$("ed-eng").value,limites,limitesFuente:$("ed-limsrc").value.trim()});
     msg("ed-msg","Guardado.","ok");
   }catch(err){ msg("ed-msg",writeErr(err),"err"); }

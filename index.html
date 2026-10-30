@@ -1312,7 +1312,7 @@ async function refreshSummary(id){
 
 /* ---------- Imagen de cada avión en la lista ---------- */
 // Imagen por matrícula (sin guiones ni espacios), así sigue andando si se corrige la matrícula
-const PLANE_IMG = {"T143":"img/t-143.png","T133":"img/t-133.png","C010":"img/c-010.png"};
+const PLANE_IMG = {"T143":"img/t-143.png","T133":"img/t-133.png","C010":"img/c-010.png","E011":"img/e-011.png"};
 const planeImg = p => { const src=PLANE_IMG[(p.matricula||"").toUpperCase().replace(/[^A-Z0-9]/g,"")];
   return src ? `<img class="plane-img" src="${src}" alt="${esc(p.modelo||"")} ${esc(p.matricula)}" loading="lazy">` : ""; };
 

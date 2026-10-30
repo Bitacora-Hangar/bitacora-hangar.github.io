@@ -1280,8 +1280,10 @@ async function refreshSummary(id){
 }
 
 /* ---------- Imagen de cada avión en la lista ---------- */
-const PLANE_IMG = {"av-t-143":"img/t-143.png"};
-const planeImg = p => PLANE_IMG[p.id] ? `<img class="plane-img" src="${PLANE_IMG[p.id]}" alt="${esc(p.modelo||"")} ${esc(p.matricula)}" loading="lazy">` : "";
+// Imagen por matrícula (sin guiones ni espacios), así sigue andando si se corrige la matrícula
+const PLANE_IMG = {"T143":"img/t-143.png","T133":"img/t-133.png"};
+const planeImg = p => { const src=PLANE_IMG[(p.matricula||"").toUpperCase().replace(/[^A-Z0-9]/g,"")];
+  return src ? `<img class="plane-img" src="${src}" alt="${esc(p.modelo||"")} ${esc(p.matricula)}" loading="lazy">` : ""; };
 
 /* ---------- Vencimientos de fluidos ---------- */
 // Valores por defecto del Aero Commander 500U (Lycoming IO-540 con filtro de aceite). El administrador los cambia por avión.
